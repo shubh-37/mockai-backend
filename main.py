@@ -6,6 +6,7 @@ from database import users_collection
 import schemas, auth
 import openai_utils
 import json
+from datetime import datetime
 
 logging.basicConfig(filename='app.log', level=logging.INFO)
 logging.getLogger('pymongo').setLevel(logging.WARNING)
@@ -60,7 +61,8 @@ async def signup(user: schemas.UserCreate = Form(...)):
         "resume": f'{thread_id}_resume.pdf',
         "overall_experience_yrs": user.overall_experience_yrs,
         "assistant_id": assistant_id,
-        "thread_id": thread_id
+        "thread_id": thread_id,
+        "date_created": datetime.now()
     }
     
     # Save user in the database
@@ -109,8 +111,9 @@ async def interview_feedback(current_user: str = Depends(auth.get_current_user))
     }
     Focus on providing constructive, actionable feedback for each area. Be objective and concise. Output in JSON format only."""})
     feedback = json.loads(msgs)
+    feedback['timestamp'] = datetime.now() 
     users_collection.update_one({'_id': db_user['_id']}, {"$push": {"scores": feedback}})
-    return JSONResponse(content=feedback)
+    return JSONResponse(content=json.loads(msgs))
 
 @app.post("/user_feedback", response_model=schemas.Message)
 async def user_feedback(feedback: schemas.Feedback, current_user: str = Depends(auth.get_current_user)):
@@ -121,7 +124,8 @@ async def user_feedback(feedback: schemas.Feedback, current_user: str = Depends(
         "recommend_score": feedback.recommend_score,
         "pay_for_report": feedback.pay_for_report,
         "pay_price": feedback.pay_price,
-        "suggestions": feedback.suggestions
+        "suggestions": feedback.suggestions,
+        "timestamp": datetime.now()
     }
     users_collection.update_one({'_id': db_user['_id']}, {"$push": {"feedback": user_feedback}})
     return JSONResponse(content={"message": "Thank you for your valuable feedback!!!"})
