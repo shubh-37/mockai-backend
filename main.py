@@ -12,7 +12,7 @@ logging.getLogger('pymongo').setLevel(logging.WARNING)
 
 app = FastAPI()
 
-origins = ["http://localhost:5173", "https://project-udaan-dev.netlify.app"]
+origins = ["http://localhost:5173", "https://project-udaan-dev.netlify.app", "https://prepsom.com"]
 
 app.add_middleware(
     CORSMiddleware,
