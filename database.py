@@ -1,5 +1,6 @@
 from pymongo import MongoClient
 import os
+import logging
 
 # Load environment variables (AWS configuration should be handled in your environment)
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
