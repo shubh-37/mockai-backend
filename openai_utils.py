@@ -72,13 +72,13 @@ def create_thread_specific_assistant(user_id, vector_store_id, job_role, industr
             2. Technical and Industry-Relevant Assessment (25% weight):
                 - Create questions aligned with the key skills, knowledge, and trends outlined in the job description.
                 - Test the candidate's understanding of technical concepts and practical applications.
-            3. Evaluate the interview based on below skills:
-                - Good Financial modelling skills.
-                - The candidate should be comfortable the three Financial statements and how they link with each other.
-                - The candidate should be good with excel skills.
-                - The candidate understands how DCF works.
-                - The candidate understands how depreciation and amortization calculation works.
-                - The candidate should be able to construct cash flow statement.
+                - Evaluate the interview based on below skills if the role is investment or finance based:
+                    -- Good Financial modelling skills.
+                    -- The candidate should be comfortable the three Financial statements and how they link with each other.
+                    -- The candidate should be good with excel skills.
+                    -- The candidate understands how DCF works.
+                    -- The candidate understands how depreciation and amortization calculation works.
+                    -- The candidate should be able to construct cash flow statement.
             3. Resume-Based Questions (25% weight):
                 - Ask specific questions about the candidate's past experiences, achievements, and roles mentioned in their resume.
                 - Evaluate their ability to relate past experiences to the requirements of the job role.
