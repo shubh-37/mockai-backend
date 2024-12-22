@@ -3,6 +3,7 @@ from fastapi import UploadFile
 import re
 
 class UserCreate(BaseModel):
+    full_name: str
     email: EmailStr
     password: str
     institute: str
@@ -49,7 +50,7 @@ class UserResponse(BaseModel):
     response: str
 
 class UserOut(BaseModel):
-    email: str
+    username: str
     message: str
 
 class Feedback(BaseModel):

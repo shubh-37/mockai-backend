@@ -48,6 +48,7 @@ async def signup(user: schemas.UserCreate = Form(...)):
     thread_id, assistant_id = await openai_utils.create_user_thread_and_assistant(user.email, user.resume)
     
     user_data = {
+        "full_name": user.full_name,
         "email": user.email,
         "hashed_password": hashed_password,
         "mobile_number": user.mobile_number,
@@ -64,7 +65,7 @@ async def signup(user: schemas.UserCreate = Form(...)):
     # created_user = users_collection.find_one({"_id": result.inserted_id})
 
     access_token = auth.create_access_token(data={"sub": user.email})
-    return JSONResponse(content={"message": access_token, "email": user.email})
+    return JSONResponse(content={"message": access_token, "username": user.full_name.split(" ")[0]})
 
 @app.post("/login", response_model=schemas.UserOut)
 async def login(user: schemas.UserLogin):
