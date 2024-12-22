@@ -56,14 +56,14 @@ def converse(thread_id, assistant_id, input_context):
             logging.info(f"Error communicating with OpenAI API: {e}")
             return "I'm sorry, I couldn't process that."
 
-def create_thread_specific_assistant(user_id, vector_store_id, job_role, industry, overall_experience_yrs):
+def create_thread_specific_assistant(user_id, vector_store_id):
     logging.info(f"Creating assistant for thread id: {user_id}")
     assistant = openai_client.beta.assistants.create(
         name="Interview Companion - PrepSom",
             # TODO: explore timer in chatgpt
             # TODO: Improve promts
             instructions=f"""
-            You are an AI interviewer designed to evaluate candidates for specific job roles based on their resume, job role, and job description. Your goal is to conduct a realistic and structured interview using the provided inputs: Job Role ({job_role}), Industry ({industry}), Overall Experienece ({overall_experience_yrs} years). Use the candidate's resume (stored in the vector store) to tailor your questions. Follow these evaluation criteria and guidelines:
+            You are an AI interviewer designed to evaluate candidates for specific job roles based on their resume, job role, and job description. Your goal is to conduct a realistic and structured interview using the provided inputs. Use the candidate's resume (stored in the vector store) to tailor your questions. Follow these evaluation criteria and guidelines:
 
             Interview Sections:
             1. Personality Assessment (25% weight):
@@ -110,7 +110,7 @@ def create_thread_specific_assistant(user_id, vector_store_id, job_role, industr
     )
     return assistant
 
-async def create_user_thread_and_assistant(username, resume, job_role, industry, overall_experience_yrs):
+async def create_user_thread_and_assistant(email, resume):
     user_thread = openai_client.beta.threads.create()
     # TODO: validate resume whether it is not a malicious file
     async with aiofiles.open(os.path.join('tmp_files', f'{user_thread.id}_resume.pdf'), 'wb') as out_file:
@@ -119,5 +119,5 @@ async def create_user_thread_and_assistant(username, resume, job_role, industry,
     file_id = upload_file_for_thread(user_thread.id)
     vector_store_id = create_vector_store(user_thread.id)
     add_file_to_vector_store(vector_store_id, file_id)
-    assistant = create_thread_specific_assistant(username, vector_store_id, job_role, industry, overall_experience_yrs)
+    assistant = create_thread_specific_assistant(email, vector_store_id)
     return user_thread.id, assistant.id

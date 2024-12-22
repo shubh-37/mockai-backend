@@ -3,15 +3,11 @@ from fastapi import UploadFile
 import re
 
 class UserCreate(BaseModel):
-    username: str
     email: EmailStr
     password: str
     institute: str
     mobile_number: str
-    job_role: str
-    industry: str
     resume: UploadFile
-    overall_experience_yrs: int
 
     @field_validator("mobile_number")
     def validate_mobile_number(cls, value: str) -> str:
@@ -19,6 +15,21 @@ class UserCreate(BaseModel):
         if not re.fullmatch(r"^\+?\d{10,15}$", value):
             raise ValueError("Invalid mobile number. It must be 10-15 digits and may start with '+'.")
         return value
+    
+class InterviewCreate(BaseModel):
+    job_role: str
+    industry: str
+    overall_experience_yrs: int
+
+    @field_validator("overall_experience_yrs")
+    def validate_overall_experience_yrs(cls, value: int) -> int:
+        if not value>=0:
+            raise ValueError("Invalid Overall Experience (years). It must be greater than zero.")
+        return value
+    
+class InterviewOut(BaseModel):
+    message: str
+    interview_id: int
     
 class InterviewFeedback(BaseModel):
     overall_score: int
@@ -28,7 +39,7 @@ class InterviewFeedback(BaseModel):
     areas_of_improvement: str
     
 class UserLogin(BaseModel):
-    username: str
+    email: str
     password: str
 
 class Message(BaseModel):
@@ -38,7 +49,7 @@ class UserResponse(BaseModel):
     response: str
 
 class UserOut(BaseModel):
-    username: str
+    email: str
     message: str
 
 class Feedback(BaseModel):
@@ -67,8 +78,4 @@ class Feedback(BaseModel):
         if pay and (price is None or price < 0):
             raise ValueError("Price must be provided and >= 0 if the pay for report is set to True.")
         return values
-    
-
-# payment integration for report
-# introduce yourself, why did you chose this profession
 
