@@ -6,7 +6,7 @@ import logging
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
 
 client = MongoClient(MONGO_URI)
-db = client['fastapi_db']  # Connect to the database
+db = client['prepsom_db']  # Connect to the database
 logging.info(db.list_collection_names())  # Test connection
 users_collection = db['users']  # Users collection
 
