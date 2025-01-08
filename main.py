@@ -9,7 +9,6 @@ import json
 from datetime import datetime
 import time
 
-logging.basicConfig(filename='app.log', level=logging.INFO)
 logging.getLogger('pymongo').setLevel(logging.WARNING)
 
 app = FastAPI()
