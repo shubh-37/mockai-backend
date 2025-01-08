@@ -1,0 +1,7 @@
+__pycache__
+venv/
+*.log
+tmp_files/
+certs/
+auth_file/
+tmp_*

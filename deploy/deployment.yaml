@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prepsom-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prepsom-backend
+  template:
+    metadata:
+      labels:
+        app: prepsom-backend
+    spec:
+      volumes:
+      - name: tls-certs
+        secret:
+          secretName: tls-certs
+      containers:
+      - name: prepsom-backend
+        image: gcr.io/prepsom/prepsom-backend:latest
+        volumeMounts:
+        - name: tls-certs
+          mountPath: "/apps/prepsom-backend/certs"
+          readOnly: true
+        ports:
+        - containerPort: 8000
+        env:
+        - name: MONGO_URI
+          valueFrom:
+            secretKeyRef:
+              name: secrets
+              key: MONGO_URI
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: secrets
+              key: OPENAI_API_KEY
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: secrets
+              key: SECRET_KEY
