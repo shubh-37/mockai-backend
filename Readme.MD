@@ -1,4 +1,4 @@
-## Project Udaan (Backend)
+## PrepSOM (Backend)
 
 Run below steps to start the server:
 1. Clone the repo using git clone.
