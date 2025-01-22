@@ -2,12 +2,13 @@ from fastapi import FastAPI, Form, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from fastapi.responses import JSONResponse
-from database import users_collection
+from database import users_collection, company_collection
 import schemas, auth
 import openai_utils
 import json
 from datetime import datetime
 import time
+from typing import List
 
 logging.getLogger('pymongo').setLevel(logging.WARNING)
 
@@ -23,48 +24,96 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# TODO: introduce db to persist the above dict and also store some interview metadata for data visualization and analysis.
-# TODO: life cycle of thread_assistants, delete entry once interview ends after capturing essential metadata.
-
 @app.get("/")
 async def health_check():
     return JSONResponse(content={"message": "Success."})
 
 @app.post("/signup", response_model=schemas.UserOut)
 async def signup(user: schemas.UserCreate = Form(...)):
-    logging.info(user)
+    logging.info(f"New User Signup : {user.full_name} - {user.email} ")
     # Check if user already exists
     existing_user = users_collection.find_one({ "email": user.email })
     if existing_user:
+        logging.info("Email already registered. It should be unique.")
         raise HTTPException(status_code=400, detail="Email already registered. It should be unique.")
-    existing_user = users_collection.find_one({ "mobile_number": user.mobile_number})
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Mobile Number already registered. It should be unique.")
     # Hash the password
     hashed_password = auth.hash_password(user.password)
-
     # create user thread and assitant
-    thread_id, assistant_id = await openai_utils.create_user_thread_and_assistant(user.email, user.resume)
-    
+    thread_id, assistant_id, vs_id = openai_utils.create_user_thread_and_assistant(user.email)
+    current_time = datetime.utcnow()
     user_data = {
         "full_name": user.full_name,
         "email": user.email,
         "hashed_password": hashed_password,
-        "mobile_number": user.mobile_number,
-        "institute": user.institute,
-        "resume": f'{thread_id}_resume.pdf',
         "assistant_id": assistant_id,
         "thread_id": thread_id,
-        "date_created": datetime.now()
+        "vector_store_id": vs_id,
+        "date_created": current_time,
+        "last_updated": current_time,
+        "last_loggedin": current_time,
+        "interviews": {}
     }
-    
     # Save user in the database
     result = users_collection.insert_one(user_data)
     logging.info(result.inserted_id)
-    # created_user = users_collection.find_one({"_id": result.inserted_id})
-
     access_token = auth.create_access_token(data={"sub": user.email})
     return JSONResponse(content={"message": access_token, "username": user.full_name.split(" ")[0]})
+
+@app.patch("/profile", response_model=schemas.Message)
+async def update_profile(profile: schemas.UserProfile = Form(...), current_user: str = Depends(auth.get_current_user)):
+    logging.info(f"Update profile: {profile}")
+    db_user = users_collection.find_one({"email": current_user})
+    if db_user is None:
+        raise HTTPException(status_code=400, detail="User not found.")
+    if profile.mobile_number is not None:
+        existing_user = users_collection.find_one({ "mobile_number": profile.mobile_number, "email": { "$ne": current_user }})
+        if existing_user:
+            logging.info("Mobile Number already registered. It should be unique.")
+            raise HTTPException(status_code=400, detail="Mobile Number already registered. It should be unique.")
+    update_data = json.loads(profile.model_dump_json(exclude_unset=True, exclude={"resume", "email", "password"}))
+    if profile.password is not None:
+        update_data['hashed_password'] = auth.hash_password(profile.password)
+    if profile.resume is not None:
+        try:
+            if db_user.get('resume_file_id') is not None:
+                openai_utils.delete_file(db_user['vector_store_id'], db_user['resume_file_id'])
+            file_id = await openai_utils.add_file_to_vs(current_user, profile.resume, db_user['vector_store_id'])
+            update_data['resume_file_id'] = file_id
+        except Exception as e:
+            raise HTTPException(status_code=400, detail="Error updating profile. Try again after sometime.")
+    update_data['last_updated'] = datetime.utcnow()
+    result = users_collection.update_one({"_id": db_user['_id']}, {"$set": update_data})
+    if result.modified_count == 0:
+        logging.info("Profile not updated. Try again.")
+        raise HTTPException(status_code=400, detail="Profile not updated. Try again.")
+    return JSONResponse(content={"message": "Profile updated successfully."})
+
+@app.get("/profile", response_model=schemas.UserProfile)
+async def get_profile(current_user: str = Depends(auth.get_current_user)):
+    db_user = users_collection.find_one({"email": current_user})
+    if db_user is None:
+        raise HTTPException(status_code=400, detail="User not found.")
+    profile_info = {
+        "full_name": db_user.get("full_name"),
+        "email": db_user.get("email"),
+        "mobile_number": db_user.get("mobile_number"),
+        "institute": db_user.get("institute"),
+        "resume": None,
+        "yrs_of_exp": db_user.get("yrs_of_exp"),
+        "job_role": db_user.get("job_role"),
+        "company": db_user.get("company"),
+        "password": None,
+        "resume": True if db_user.get("resume_file_id") else False
+    }
+    return JSONResponse(content=profile_info)
+
+@app.get("/companies", response_model=List[str])
+async def get_companies():
+    db_companies = company_collection.find({}, { "name": 1, "_id": 0 })
+    companies = []
+    for db_company in db_companies:
+        companies.append(db_company["name"])
+    return JSONResponse(content=companies)
 
 @app.post("/login", response_model=schemas.UserOut)
 async def login(user: schemas.UserLogin):
@@ -74,58 +123,66 @@ async def login(user: schemas.UserLogin):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     # Create JWT token
     access_token = auth.create_access_token(data={"sub": db_user["email"]})
-    return JSONResponse(content={"message": access_token, "email": db_user['email']})
+    users_collection.update_one({"_id": db_user['_id']}, {"$set": { "last_loggedin": datetime.utcnow() }})
+    return JSONResponse(content={"message": access_token, "username": db_user['full_name'].split(" ")[0]})
 
-@app.post("/interview_input", response_model=schemas.InterviewOut)
-async def interview_input(interview_input: schemas.InterviewCreate, current_user: str = Depends(auth.get_current_user)):
-    db_user = users_collection.find_one({"email": current_user})
-    interview_data = {
-        "job_role": interview_input.job_role,
-        "industry": interview_input.industry,
-        "overall_experience_yrs": interview_input.overall_experience_yrs,
-        "date_created": datetime.now()
-    }
-    interview_id = int(time.time())
-    users_collection.update_one({'_id': db_user['_id']}, {"$set": {f"interviews.{interview_id}": interview_data}})
-    msgs = openai_utils.converse(db_user['thread_id'], db_user['assistant_id'],{"role": "user", "content": f"Add to the prompt - Customize the interview for Job Role - {interview_input.job_role}, Industry - {interview_input.industry}, Overall years of experince - {interview_input.overall_experience_yrs}"})
-    return JSONResponse(content={"message": msgs, "interview_id": interview_id})
-
-@app.get("/start_interview", response_model=schemas.Message)
+@app.get("/start_interview", response_model=schemas.InterviewOut)
 async def start_interview(current_user: str = Depends(auth.get_current_user)):
     # get thread_id and assistant_id from db
     db_user = users_collection.find_one({"email": current_user})
-    msgs = openai_utils.converse(db_user['thread_id'], db_user['assistant_id'],{"role": "user", "content": "Start the interview."})
-    return JSONResponse(content={"message": msgs})
+    if db_user is None:
+        raise HTTPException(status_code=400, detail="User not found.")
+    interview_data = {
+        "timestamp": datetime.utcnow(),
+        "job_role": db_user['job_role'], 
+        "company": db_user['company'], 
+        "difficulty": "Easy" if db_user['yrs_of_exp'] <=2 else ("Intermediate" if db_user['yrs_of_exp'] <=5 else "Advanced")
+    }
+    company_logo = company_collection.find_one({"name": db_user["company"]}, {"logo_link": 1, "_id": 0})
+    if company_logo is None:
+        company_logo = "Prepsom"
+    else:
+        company_logo = company_logo['logo_link']
+    msgs = openai_utils.start_interview(db_user['thread_id'], db_user['assistant_id'],interview_data, db_user["full_name"])
+    interview_id = int(time.time())
+    users_collection.update_one({'_id': db_user['_id']}, {"$set": {f"interviews.{interview_id}": interview_data}})
+    return JSONResponse(content={"questions": json.loads(msgs)['questions'], "interview_id": interview_id, "company_logo": company_logo})
 
-@app.post("/interview_convo", response_model=schemas.Message)
-async def interview_convo(response: schemas.UserResponse, current_user: str = Depends(auth.get_current_user)):
+@app.post("/submit_interview", response_model=schemas.Message)
+async def interview_convo(response: schemas.InterviewResponse, current_user: str = Depends(auth.get_current_user)):
     # get thread_id and assistant_id from db
     db_user = users_collection.find_one({"email": current_user})
-    msgs = openai_utils.converse(db_user['thread_id'], db_user['assistant_id'],{"role": "user", "content": response.response})
-    return JSONResponse(content={"message": msgs})
+    if db_user is None:
+        raise HTTPException(status_code=400, detail="User not found.")
+    if db_user.get("interviews").get(f"{response.interview_id}") is None:
+        raise HTTPException(status_code=400, detail=f"Interview not started with id {response.interview_id}")
+    qaa_list = [qaa.model_dump() for qaa in response.qaa]
+    users_collection.update_one({'_id': db_user['_id']}, {"$set": {f"interviews.{response.interview_id}.qaa": qaa_list}})
+    return JSONResponse(content={"message": "Interview submitted successfully."})
 
 @app.get("/interview_feedback", response_model=schemas.InterviewFeedback)
 async def interview_feedback(interview_id : int = Query(...), current_user: str = Depends(auth.get_current_user)):
     # get thread_id and assistant_id from db
     db_user = users_collection.find_one({"email": current_user})
-    msgs = openai_utils.converse(db_user['thread_id'], db_user['assistant_id'], {"role": "user", "content": """Evaluate the candidate's interview performance based on their user responses stored in the thread context. If the user has not given enough response, please rate accordingly. Provide feedback in the following JSON format:
-    {
-        "overall_score": <score from 1 to 10>,
-        "speech": "<evaluation of communication clarity and fluency, rated 1 to 10>",
-        "confidence": "<evaluation of the candidate's confidence, rated 1 to 10>",
-        "technical_skills": "<evaluation of technical skills based on responses, rated 1 to 10>",
-        "areas_of_improvement": "<specific and actionable suggestions for improvement>"
-    }
-    Focus on providing constructive, actionable feedback for each area. Be objective and concise. Output in JSON format only."""})
+    if db_user is None:
+        raise HTTPException(status_code=400, detail="User not found.")
+    if db_user.get("interviews").get(f"{interview_id}") is None:
+        raise HTTPException(status_code=400, detail=f"Interview not started with id {interview_id}")
+    if db_user.get("interviews").get(f"{interview_id}").get("qaa") is None:
+        raise HTTPException(status_code=400, detail=f"Interview not submitted with id {interview_id}")
+    if db_user.get("interviews").get(f"{interview_id}").get("scores"):
+        return JSONResponse(content=db_user.get("interviews").get(f"{interview_id}").get("scores"))
+    msgs = openai_utils.get_interview_feedback(db_user["thread_id"], db_user["assistant_id"], db_user["interviews"][f"{interview_id}"]["qaa"])
     feedback = json.loads(msgs)
-    feedback['timestamp'] = datetime.now() 
     users_collection.update_one({'_id': db_user['_id']}, {"$set": {f"interviews.{interview_id}.scores": feedback}})
-    return JSONResponse(content=json.loads(msgs))
+    return JSONResponse(content=feedback)
 
 @app.post("/user_feedback", response_model=schemas.Message)
 async def user_feedback(feedback: schemas.Feedback, interview_id : int = Query(...), current_user: str = Depends(auth.get_current_user)):
     # get thread_id and assistant_id from db
     db_user = users_collection.find_one({"email": current_user})
+    if db_user is None:
+        raise HTTPException(status_code=400, detail="User not found.")
     user_feedback = {
         "overall_experience": feedback.overall_experience,
         "recommend_score": feedback.recommend_score,
@@ -136,21 +193,6 @@ async def user_feedback(feedback: schemas.Feedback, interview_id : int = Query(.
     }
     users_collection.update_one({'_id': db_user['_id']}, {"$set": {f"interviews.{interview_id}.feedback": user_feedback}})
     return JSONResponse(content={"message": "Thank you for your valuable feedback!!!"})
-
-# @app.get("/.well-known/pki-validation/{filename}", response_class=PlainTextResponse)
-# async def auth_file(filename: str):
-#     file_path = Path('auth_file') / filename
-#     print(file_path)
-#     content = ""
-#     if not file_path.exists() or not file_path.is_file():
-#         raise HTTPException(status_code=404, detail="File not found")
-#     try:
-#         with open(file_path, "r", encoding="utf-8") as file:
-#             content = file.read()
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Error reading file {str(e)}")
-#     return content
-
 
 # Protected Route
 @app.get("/getCurrentUser")

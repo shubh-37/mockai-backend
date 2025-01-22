@@ -9,4 +9,4 @@ client = MongoClient(MONGO_URI)
 db = client['prepsom_db']  # Connect to the database
 logging.info(db.list_collection_names())  # Test connection
 users_collection = db['users']  # Users collection
-
+company_collection = db['company']

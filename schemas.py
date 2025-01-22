@@ -1,15 +1,30 @@
 from pydantic import BaseModel, EmailStr, field_validator, model_validator
 from fastapi import UploadFile
 import re
+from typing import Optional, List, Union
 
 class UserCreate(BaseModel):
     full_name: str
     email: EmailStr
     password: str
-    institute: str
-    mobile_number: str
-    resume: UploadFile
-
+    
+class UserProfile(BaseModel):
+    institute: Optional[str] = None
+    mobile_number: Optional[str] = None
+    resume: Union[UploadFile, bool] = None 
+    yrs_of_exp: Optional[int] = None
+    job_role: Optional[str] = None
+    company: Optional[str] = None
+    full_name: Optional[str] = None
+    password: Optional[str] = None
+    email: Optional[str] = None
+    
+    @field_validator("yrs_of_exp")
+    def validate_yrs_of_exp(cls, value: int) -> int:
+        if not value>=0:
+            raise ValueError("Invalid Experience (years). It must be greater than zero.")
+        return value
+    
     @field_validator("mobile_number")
     def validate_mobile_number(cls, value: str) -> str:
         # Example regex for international numbers (starting with +)
@@ -17,27 +32,17 @@ class UserCreate(BaseModel):
             raise ValueError("Invalid mobile number. It must be 10-15 digits and may start with '+'.")
         return value
     
-class InterviewCreate(BaseModel):
-    job_role: str
-    industry: str
-    overall_experience_yrs: int
-
-    @field_validator("overall_experience_yrs")
-    def validate_overall_experience_yrs(cls, value: int) -> int:
-        if not value>=0:
-            raise ValueError("Invalid Overall Experience (years). It must be greater than zero.")
-        return value
-    
 class InterviewOut(BaseModel):
-    message: str
+    questions: List[str]
     interview_id: int
+    company_logo: str
     
 class InterviewFeedback(BaseModel):
     overall_score: int
     speech: int
     confidence: int
     technical_skills: int
-    areas_of_improvement: str
+    areas_of_improvement: List[str]
     
 class UserLogin(BaseModel):
     email: str
@@ -46,8 +51,13 @@ class UserLogin(BaseModel):
 class Message(BaseModel):
     message: str
 
-class UserResponse(BaseModel):
-    response: str
+class QAA(BaseModel):
+    question: str
+    answer: str
+
+class InterviewResponse(BaseModel):
+    interview_id:int
+    qaa: List[QAA]
 
 class UserOut(BaseModel):
     username: str
