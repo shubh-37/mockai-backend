@@ -35,7 +35,7 @@ async def signup(user: schemas.UserCreate = Form(...)):
     existing_user = users_collection.find_one({ "email": user.email })
     if existing_user:
         logging.info("Email already registered. It should be unique.")
-        raise HTTPException(status_code=400, detail="Email already registered. It should be unique.")
+        raise HTTPException(status_code=422, detail="Email already registered. It should be unique.")
     # Hash the password
     hashed_password = auth.hash_password(user.password)
     # create user thread and assitant
@@ -64,12 +64,12 @@ async def update_profile(profile: schemas.UserProfile = Form(...), current_user:
     logging.info(f"Update profile: {profile}")
     db_user = users_collection.find_one({"email": current_user})
     if db_user is None:
-        raise HTTPException(status_code=400, detail="User not found.")
+        raise HTTPException(status_code=404, detail="User not found.")
     if profile.mobile_number is not None:
         existing_user = users_collection.find_one({ "mobile_number": profile.mobile_number, "email": { "$ne": current_user }})
         if existing_user:
             logging.info("Mobile Number already registered. It should be unique.")
-            raise HTTPException(status_code=400, detail="Mobile Number already registered. It should be unique.")
+            raise HTTPException(status_code=422, detail="Mobile Number already registered. It should be unique.")
     update_data = json.loads(profile.model_dump_json(exclude_unset=True, exclude={"resume", "email", "password"}))
     if profile.password is not None:
         update_data['hashed_password'] = auth.hash_password(profile.password)
@@ -92,7 +92,7 @@ async def update_profile(profile: schemas.UserProfile = Form(...), current_user:
 async def get_profile(current_user: str = Depends(auth.get_current_user)):
     db_user = users_collection.find_one({"email": current_user})
     if db_user is None:
-        raise HTTPException(status_code=400, detail="User not found.")
+        raise HTTPException(status_code=404, detail="User not found.")
     profile_info = {
         "full_name": db_user.get("full_name"),
         "email": db_user.get("email"),
@@ -131,7 +131,7 @@ async def start_interview(current_user: str = Depends(auth.get_current_user)):
     # get thread_id and assistant_id from db
     db_user = users_collection.find_one({"email": current_user})
     if db_user is None:
-        raise HTTPException(status_code=400, detail="User not found.")
+        raise HTTPException(status_code=404, detail="User not found.")
     interview_data = {
         "timestamp": datetime.utcnow(),
         "job_role": db_user['job_role'], 
@@ -153,9 +153,9 @@ async def interview_convo(response: schemas.InterviewResponse, current_user: str
     # get thread_id and assistant_id from db
     db_user = users_collection.find_one({"email": current_user})
     if db_user is None:
-        raise HTTPException(status_code=400, detail="User not found.")
+        raise HTTPException(status_code=404, detail="User not found.")
     if db_user.get("interviews").get(f"{response.interview_id}") is None:
-        raise HTTPException(status_code=400, detail=f"Interview not started with id {response.interview_id}")
+        raise HTTPException(status_code=404, detail=f"Interview not started with id {response.interview_id}")
     qaa_list = [qaa.model_dump() for qaa in response.qaa]
     users_collection.update_one({'_id': db_user['_id']}, {"$set": {f"interviews.{response.interview_id}.qaa": qaa_list}})
     return JSONResponse(content={"message": "Interview submitted successfully."})
@@ -165,11 +165,11 @@ async def interview_feedback(interview_id : int = Query(...), current_user: str 
     # get thread_id and assistant_id from db
     db_user = users_collection.find_one({"email": current_user})
     if db_user is None:
-        raise HTTPException(status_code=400, detail="User not found.")
+        raise HTTPException(status_code=404, detail="User not found.")
     if db_user.get("interviews").get(f"{interview_id}") is None:
-        raise HTTPException(status_code=400, detail=f"Interview not started with id {interview_id}")
+        raise HTTPException(status_code=404, detail=f"Interview not started with id {interview_id}")
     if db_user.get("interviews").get(f"{interview_id}").get("qaa") is None:
-        raise HTTPException(status_code=400, detail=f"Interview not submitted with id {interview_id}")
+        raise HTTPException(status_code=404, detail=f"Interview not submitted with id {interview_id}")
     if db_user.get("interviews").get(f"{interview_id}").get("scores"):
         return JSONResponse(content=db_user.get("interviews").get(f"{interview_id}").get("scores"))
     msgs = openai_utils.get_interview_feedback(db_user["thread_id"], db_user["assistant_id"], db_user["interviews"][f"{interview_id}"]["qaa"])
@@ -182,7 +182,7 @@ async def user_feedback(feedback: schemas.Feedback, interview_id : int = Query(.
     # get thread_id and assistant_id from db
     db_user = users_collection.find_one({"email": current_user})
     if db_user is None:
-        raise HTTPException(status_code=400, detail="User not found.")
+        raise HTTPException(status_code=404, detail="User not found.")
     user_feedback = {
         "overall_experience": feedback.overall_experience,
         "recommend_score": feedback.recommend_score,
