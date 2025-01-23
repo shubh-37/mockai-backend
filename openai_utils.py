@@ -78,7 +78,7 @@ def get_interview_feedback(thread_id, assistant_id, qaa):
         "speech": "<evaluation of communication clarity and fluency, rated 1 to 10>",
         "confidence": "<evaluation of the candidate's confidence, rated 1 to 10>",
         "technical_skills": "<evaluation of technical skills based on responses, rated 1 to 10>",
-        "areas_of_improvement": "<provide 3 specific and actionable suggestions for improvements>"
+        "areas_of_improvement": "<provide 3 specific and actionable suggestions for improvements (separated by comma)>"
     }}
     On scale of 1 to 10, 1 is lowest and 10 is highest. Focus on providing constructive, actionable feedback for each area/concept. Be objective and concise. Output in JSON format only.""")
 
