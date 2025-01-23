@@ -96,7 +96,7 @@ def start_interview(thread_id, assistant_id, interview_input, full_name):
 9. Based on question number 8, ask a follow up question.
 10. Ask a closing question for Company: {interview_input["company"]}, Role: {interview_input["job_role"]} , Difficulty: {interview_input["difficulty"]}.
 
-Generate responses in JSON format containing questions as list. Output JSON directly.""")
+Generate responses in JSON format containing questions as list. Output JSON directly. DO NOT enclose within ```json ```.""")
 
 def create_thread_specific_assistant(email, vector_store_id):
     logging.info(f"Creating assistant for user: {email}")
