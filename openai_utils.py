@@ -80,7 +80,7 @@ def get_interview_feedback(thread_id, assistant_id, qaa):
         "technical_skills": "<evaluation of technical skills based on responses, rated 1 to 10>",
         "areas_of_improvement": "<provide 3 specific and actionable suggestions for improvements (separated by comma)>"
     }}
-    On scale of 1 to 10, 1 is lowest and 10 is highest. Focus on providing constructive, actionable feedback for each area/concept. Be objective and concise. Output in JSON format only.""")
+    On scale of 1 to 10, 1 is lowest and 10 is highest. Focus on providing constructive, actionable feedback for each area/concept. Be objective and concise. Output in JSON format directly. DO NOT enclose within ```json ```.""")
 
 def start_interview(thread_id, assistant_id, interview_input, full_name):
     return get_gpt_response(thread_id, assistant_id, f"""Generate responses for each of the prompts given below. Ask questions to candidate named "{full_name}". Ask each question by acknowledging the previous one i.e. start next question with something like okay, so next let's discuss on.., thank you for sharing that.., etc. Use candidate name while asking each question to make it more engaging.
@@ -96,7 +96,12 @@ def start_interview(thread_id, assistant_id, interview_input, full_name):
 9. Based on question number 8, ask a follow up question.
 10. Ask a closing question for Company: {interview_input["company"]}, Role: {interview_input["job_role"]} , Difficulty: {interview_input["difficulty"]}.
 
-Generate responses in JSON format containing questions as list. Output JSON directly. DO NOT enclose within ```json ```.""")
+Generate responses in below JSON format containing "questions" as list.
+{{
+    "questions": [ <comma seperated list of questions> ]
+}}
+
+Output JSON directly. DO NOT enclose within ```json ```.""")
 
 def create_thread_specific_assistant(email, vector_store_id):
     logging.info(f"Creating assistant for user: {email}")
