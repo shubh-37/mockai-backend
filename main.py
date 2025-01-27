@@ -61,31 +61,34 @@ async def signup(user: schemas.UserCreate = Form(...)):
 
 @app.patch("/profile", response_model=schemas.Message)
 async def update_profile(profile: schemas.UserProfile = Form(...), current_user: str = Depends(auth.get_current_user)):
-    logging.info(f"Update profile: {profile}")
-    db_user = users_collection.find_one({"email": current_user})
-    if db_user is None:
-        raise HTTPException(status_code=404, detail="User not found.")
-    if profile.mobile_number is not None:
-        existing_user = users_collection.find_one({ "mobile_number": profile.mobile_number, "email": { "$ne": current_user }})
-        if existing_user:
-            logging.info("Mobile Number already registered. It should be unique.")
-            raise HTTPException(status_code=422, detail="Mobile Number already registered. It should be unique.")
-    update_data = json.loads(profile.model_dump_json(exclude_unset=True, exclude={"resume", "email", "password"}))
-    if profile.password is not None:
-        update_data['hashed_password'] = auth.hash_password(profile.password)
-    if profile.resume is not None:
-        try:
-            if db_user.get('resume_file_id') is not None:
-                openai_utils.delete_file(db_user['vector_store_id'], db_user['resume_file_id'])
-            file_id = await openai_utils.add_file_to_vs(current_user, profile.resume, db_user['vector_store_id'])
-            update_data['resume_file_id'] = file_id
-        except Exception as e:
-            raise HTTPException(status_code=400, detail="Error updating profile. Try again after sometime.")
-    update_data['last_updated'] = datetime.utcnow()
-    result = users_collection.update_one({"_id": db_user['_id']}, {"$set": update_data})
-    if result.modified_count == 0:
-        logging.info("Profile not updated. Try again.")
-        raise HTTPException(status_code=400, detail="Profile not updated. Try again.")
+    try:
+        logging.info(f"Update profile: {profile}")
+        db_user = users_collection.find_one({"email": current_user})
+        if db_user is None:
+            raise HTTPException(status_code=404, detail="User not found.")
+        if profile.mobile_number is not None:
+            existing_user = users_collection.find_one({ "mobile_number": profile.mobile_number, "email": { "$ne": current_user }})
+            if existing_user:
+                logging.info("Mobile Number already registered. It should be unique.")
+                raise HTTPException(status_code=422, detail="Mobile Number already registered. It should be unique.")
+        update_data = json.loads(profile.model_dump_json(exclude_unset=True, exclude={"resume", "email", "password"}))
+        if profile.password is not None:
+            update_data['hashed_password'] = auth.hash_password(profile.password)
+        if profile.resume is not None:
+            try:
+                if db_user.get('resume_file_id') is not None:
+                    openai_utils.delete_file(db_user['vector_store_id'], db_user['resume_file_id'])
+                file_id = await openai_utils.add_file_to_vs(current_user, profile.resume, db_user['vector_store_id'])
+                update_data['resume_file_id'] = file_id
+            except Exception as e:
+                raise HTTPException(status_code=400, detail="Error updating profile. Try again after sometime.")
+        update_data['last_updated'] = datetime.utcnow()
+        result = users_collection.update_one({"_id": db_user['_id']}, {"$set": update_data})
+        if result.modified_count == 0:
+            logging.info("Profile not updated. Try again.")
+            raise HTTPException(status_code=400, detail="Profile not updated. Try again.")
+    except Exception as e:
+        return HTTPException(status_code=500, detail=str(e))
     return JSONResponse(content={"message": "Profile updated successfully."})
 
 @app.get("/profile", response_model=schemas.UserProfile)
