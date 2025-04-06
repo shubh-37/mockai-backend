@@ -3,65 +3,50 @@ from fastapi import UploadFile
 import re
 from typing import Optional, List, Union
 
+
 class UserCreate(BaseModel):
-    full_name: str
+    name: str
     email: EmailStr
-    password: str
-    
+    mobile_number: str
+    country_code: Optional[str] = None
+
+
 class UserProfile(BaseModel):
-    institute: Optional[str] = None
+    organization: Optional[str] = None
     mobile_number: Optional[str] = None
-    resume: Union[UploadFile, bool] = None 
-    yrs_of_exp: Optional[int] = None
+    years_of_experience: Optional[int] = None
     job_role: Optional[str] = None
-    company: Optional[str] = None
-    full_name: Optional[str] = None
-    password: Optional[str] = None
+    name: Optional[str] = None
     email: Optional[str] = None
-    
-    @field_validator("yrs_of_exp")
+    field: Optional[str] = None
+
+    @field_validator("years_of_experience")
     def validate_yrs_of_exp(cls, value: int) -> int:
-        if not value>=0:
-            raise ValueError("Invalid Experience (years). It must be greater than zero.")
+        if not value >= 0:
+            raise ValueError(
+                "Invalid Experience (years). It must be greater than zero."
+            )
         return value
-    
+
     @field_validator("mobile_number")
     def validate_mobile_number(cls, value: str) -> str:
         # Example regex for international numbers (starting with +)
         if not re.fullmatch(r"^\+?\d{10,15}$", value):
-            raise ValueError("Invalid mobile number. It must be 10-15 digits and may start with '+'.")
+            raise ValueError(
+                "Invalid mobile number. It must be 10-15 digits and may start with '+'."
+            )
         return value
-    
+
+
 class InterviewOut(BaseModel):
     questions: List[str]
     interview_id: int
     company_logo: str
-    
-class InterviewFeedback(BaseModel):
-    overall_score: int
-    speech: int
-    confidence: int
-    technical_skills: int
-    areas_of_improvement: List[str]
-    
-class UserLogin(BaseModel):
-    email: str
-    password: str
+
 
 class Message(BaseModel):
     message: str
 
-class QAA(BaseModel):
-    question: str
-    answer: str
-
-class InterviewResponse(BaseModel):
-    interview_id:int
-    qaa: List[QAA]
-
-class UserOut(BaseModel):
-    username: str
-    message: str
 
 class Feedback(BaseModel):
     overall_experience: int
@@ -72,21 +57,89 @@ class Feedback(BaseModel):
 
     @field_validator("overall_experience")
     def validate_overall_experience(cls, value: int) -> int:
-        if not (value >=1 or value <=5):
-            raise ValueError("Invalid Value. Overall Experience should be rated between 1 to 5.")
+        if not (value >= 1 or value <= 5):
+            raise ValueError(
+                "Invalid Value. Overall Experience should be rated between 1 to 5."
+            )
         return value
-    
+
     @field_validator("recommend_score")
     def validate_recommend_score(cls, value: int) -> int:
-        if not (value >=1 or value <=5):
-            raise ValueError("Invalid Value. Recommend Score should be rated between 1 to 5.")
+        if not (value >= 1 or value <= 5):
+            raise ValueError(
+                "Invalid Value. Recommend Score should be rated between 1 to 5."
+            )
         return value
-    
+
     @model_validator(mode="after")
     def validate_pay(cls, values):
         price = values.pay_price
         pay = values.pay_for_report
         if pay and (price is None or price < 0):
-            raise ValueError("Price must be provided and >= 0 if the pay for report is set to True.")
+            raise ValueError(
+                "Price must be provided and >= 0 if the pay for report is set to True."
+            )
         return values
 
+
+class TextToSpeechRequest(BaseModel):
+    text: str
+
+
+class QuizSubmissionRequest(BaseModel):
+    correct_no_of_questions: int
+    wrong_no_of_answers: int
+    score: int
+    topics: List[str]
+
+
+class VerifySignupOTPRequest(BaseModel):
+    email: str
+    email_otp: int
+    mobile_otp: int
+
+
+class VerifyOtpResponse(BaseModel):
+    token: str
+    user: str
+
+
+class AboutRequest(BaseModel):
+    about: str
+
+
+class SendOtpRequest(BaseModel):
+    mobile_number: str
+    country_code: Optional[str] = "91"
+
+
+class VerifyOtpRequest(BaseModel):
+    mobile_number: str
+    country_code: Optional[str] = "91"
+    otp: int
+
+
+class OtpResponse(BaseModel):
+    message: str
+    flag: bool
+
+
+class VerifyPaymentInput(BaseModel):
+    order_id: str
+    payment_id: str
+    signature: str
+    reviews_bought: int = 1
+
+
+class Employee(BaseModel):
+    email: str
+    mobile_number: str
+    name: str
+    role_in_company: str
+    company_name: str
+    password: str
+
+
+class LoginEmployee(BaseModel):
+    email: str
+    password: str

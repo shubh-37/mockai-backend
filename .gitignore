@@ -5,3 +5,5 @@ tmp_files/
 certs/
 auth_file/
 tmp_*
+env.bat
+prepsom-key.json

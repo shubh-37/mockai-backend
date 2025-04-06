@@ -1,27 +1,40 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: prepsom-backend
+  name: prepsom-backend-v2
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: prepsom-backend
+      app: prepsom-backend-v2
   template:
     metadata:
       labels:
-        app: prepsom-backend
+        app: prepsom-backend-v2
     spec:
       volumes:
-      - name: tls-certs
+      - name: tls-certs-dev
         secret:
-          secretName: tls-certs
+          secretName: tls-certs-dev
+      - name: google-sa
+        secret:
+          secretName: google-sa
       containers:
-      - name: prepsom-backend
+      - name: prepsom-backend-v2
         image: gcr.io/prepsom/github.com/vidyam99/prepsom-backend:latest
+        resources:
+          limits:
+            ephemeral-storage: 100Mi
+          requests:
+            cpu: 200m
+            ephemeral-storage: 100Mi
+            memory: 500Mi
         volumeMounts:
-        - name: tls-certs
+        - name: tls-certs-dev
           mountPath: "/apps/prepsom-backend/certs"
+          readOnly: true
+        - name: google-sa
+          mountPath: "/apps/prepsom-backend/googlekey"
           readOnly: true
         ports:
         - containerPort: 8000
@@ -41,3 +54,35 @@ spec:
             secretKeyRef:
               name: secrets
               key: SECRET_KEY
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: /apps/prepsom-backend/googlekey/prepsom-key.json
+        - name: FASTWASMS_INSTANCE_ID
+          value: 67BF41040F24A
+        - name: FASTWASMS_ACCESS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: secrets
+              key: FASTWASMS_ACCESS_TOKEN
+        - name: FASTWASMS_TYPE
+          value: text
+        - name: SEND_GRID_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: secrets
+              key: SEND_GRID_API_KEY
+        - name: REDIS_URI
+          valueFrom:
+            secretKeyRef:
+              name: secrets
+              key: REDIS_URI
+          
+        - name: RAZORPAY_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: secrets
+              key: RAZORPAY_KEY_ID
+        - name: RAZORPAY_KEY_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: secrets
+              key: RAZORPAY_KEY_SECRET

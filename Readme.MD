@@ -10,4 +10,4 @@ Run below steps to start the server:
 6. pip3 install -r requirements.txt
 7. export OPENAI_API_KEY="" (for linux)
    set OPENAI_API_KEY="" (for windows)
-8. uvicorn main:app --host 0.0.0.0 --port 8000 --log-config logging.conf --ssl-keyfile certs\key.pem --ssl-certfile=certs\cert.pem
+8. uvicorn main:app --host 0.0.0.0 --port 8000 --log-config logging.conf --ssl-keyfile certs\key.pem --ssl-certfile certs\cert.pem
