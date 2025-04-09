@@ -16,11 +16,9 @@ app = FastAPI()
 
 origins = [
     "http://localhost:5173",
-    "https://project-udaan-dev.netlify.app",
-    "https://prepsom.com",
-    "https://dev-prepsom.netlify.app",
-    "https://www.prepsom.com",
-    "https://admin.prepsom.com",
+    "https://mockai.tech",
+    "https://www.mockai.tech",
+    "https://dev.mockai.tech",
 ]
 
 app.add_middleware(
