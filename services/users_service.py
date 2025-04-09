@@ -33,8 +33,8 @@ async def get_redis():
         await redis.close()
 
 
-def otp_redis_key(country_code: str, mobile_number: str) -> str:
-    return f"otp:{country_code}:{mobile_number}"
+def otp_redis_key(email: str) -> str:
+    return f"otp:{email}"
 
 
 def generate_random_filename(original_name: str) -> str:
@@ -55,7 +55,7 @@ async def send_email_otp(email: str, otp: int):
     body = f"Hello,\n\nYour verification code is {otp}. This code is valid for 5 minutes. Please do not share this code with anyone.\n\nThank you!"
 
     message = Mail(
-        from_email="contact@prepsom.com",
+        from_email="support@mockai.tech",
         to_emails=email,
         subject=subject,
         html_content=body,
@@ -70,47 +70,47 @@ async def send_email_otp(email: str, otp: int):
         raise HTTPException(status_code=500, detail="Failed to send email OTP.")
 
 
-async def send_otp_service(user: dict, otp: int) -> dict:
-    country_code = user.get("countryCode", "")
-    mobile_number = user.get("mobileNumber", "")
+# async def send_otp_service(user: dict, otp: int) -> dict:
+#     country_code = user.get("countryCode", "")
+#     mobile_number = user.get("mobileNumber", "")
 
-    # If running in development mode, log and return a success message without sending an actual request.
-    # if os.getenv("NODE_ENV", "development") == "development":
-    #     logging.info(f"Whatsapp Sent to {country_code} {mobile_number}")
-    #     return {"message": "Successfully sent via Whatsapp"}
+#     # If running in development mode, log and return a success message without sending an actual request.
+#     # if os.getenv("NODE_ENV", "development") == "development":
+#     #     logging.info(f"Whatsapp Sent to {country_code} {mobile_number}")
+#     #     return {"message": "Successfully sent via Whatsapp"}
 
-    # Read configuration from environment variables.
-    instance_id = os.getenv("FASTWASMS_INSTANCE_ID")
-    access_token = os.getenv("FASTWASMS_ACCESS_TOKEN")
-    api_url = os.getenv("FASTWASMS_API_URL", "https://fastwasms.in")
-    message_type = os.getenv("FASTWASMS_TYPE", "text")
+#     # Read configuration from environment variables.
+#     instance_id = os.getenv("FASTWASMS_INSTANCE_ID")
+#     access_token = os.getenv("FASTWASMS_ACCESS_TOKEN")
+#     api_url = os.getenv("FASTWASMS_API_URL", "https://fastwasms.in")
+#     message_type = os.getenv("FASTWASMS_TYPE", "text")
 
-    # Hardcode OTP message
-    final_message = f"Hello, your verification code is {otp}. This code is valid for 5 minutes. Do not share this code with anyone."
-    encoded_message = urllib.parse.quote(final_message)
-    clean_country_code = country_code.replace("+", "")
+#     # Hardcode OTP message
+#     final_message = f"Hello, your verification code is {otp}. This code is valid for 5 minutes. Do not share this code with anyone."
+#     encoded_message = urllib.parse.quote(final_message)
+#     clean_country_code = country_code.replace("+", "")
 
-    # Construct the FastWASMS URL with required query parameters.
-    url = (
-        f"{api_url}/api/send?"
-        f"number={clean_country_code}{mobile_number}"
-        f"&type={message_type}"
-        f"&message={encoded_message}"
-        f"&instance_id={instance_id}"
-        f"&access_token={access_token}"
-    )
-    logging.info(f"FastWASMS URL: {url}")
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(url)
-            data = response.json()
-            logging.info(f"FastWASMS response: {data}")
-            if data.get("status") == "error":
-                raise Exception(data.get("message", "Error sending message"))
-            return {"message": data.get("message", "Message sent successfully")}
-        except Exception as e:
-            logging.error(f"Error sending FastWASMS notification: {e}")
-            raise Exception(f"Error sending message: {e}")
+#     # Construct the FastWASMS URL with required query parameters.
+#     url = (
+#         f"{api_url}/api/send?"
+#         f"number={clean_country_code}{mobile_number}"
+#         f"&type={message_type}"
+#         f"&message={encoded_message}"
+#         f"&instance_id={instance_id}"
+#         f"&access_token={access_token}"
+#     )
+#     logging.info(f"FastWASMS URL: {url}")
+#     async with httpx.AsyncClient() as client:
+#         try:
+#             response = await client.get(url)
+#             data = response.json()
+#             logging.info(f"FastWASMS response: {data}")
+#             if data.get("status") == "error":
+#                 raise Exception(data.get("message", "Error sending message"))
+#             return {"message": data.get("message", "Message sent successfully")}
+#         except Exception as e:
+#             logging.error(f"Error sending FastWASMS notification: {e}")
+#             raise Exception(f"Error sending message: {e}")
 
 
 @router.post("/signup", response_model=schemas.Message)
@@ -128,7 +128,7 @@ async def signup(
 
     # Generate OTPs for email and mobile
     email_otp = random.randint(1000, 9999)
-    mobile_otp = random.randint(1000, 9999)
+    # mobile_otp = random.randint(1000, 9999)
     current_time = datetime.utcnow().timestamp()
 
     # Build pending signup data (do not yet create the permanent account)
@@ -142,7 +142,7 @@ async def signup(
             else "91"
         ),
         "email_otp": email_otp,
-        "mobile_otp": mobile_otp,
+        # "mobile_otp": mobile_otp,
         "timestamp": current_time,
     }
     pending_key = f"pending_signup:{user.email}"
@@ -153,22 +153,20 @@ async def signup(
     await send_email_otp(user.email, email_otp)
 
     # Send OTP via mobile using FastWASMS.
-    mobile_user = {
-        "countryCode": pending_data["country_code"],
-        "mobileNumber": user.mobile_number,
-    }
-    try:
-        await send_otp_service(user=mobile_user, otp=mobile_otp)
-    except Exception as e:
-        logging.error(f"Failed to send mobile OTP: {e}")
-        raise HTTPException(
-            status_code=500, detail="Failed to send OTP to mobile number."
-        )
+    # mobile_user = {
+    #     "countryCode": pending_data["country_code"],
+    #     "mobileNumber": user.mobile_number,
+    # }
+    # try:
+    #     await send_otp_service(user=mobile_user, otp=mobile_otp)
+    # except Exception as e:
+    #     logging.error(f"Failed to send mobile OTP: {e}")
+    #     raise HTTPException(
+    #         status_code=500, detail="Failed to send OTP to mobile number."
+    #     )
 
     return JSONResponse(
-        content={
-            "message": "OTP sent to your email and mobile. Please verify to complete signup."
-        }
+        content={"message": "OTP sent to your email. Please verify to complete signup."}
     )
 
 
@@ -194,9 +192,9 @@ async def verify_signup_otp(
         raise HTTPException(status_code=422, detail="Invalid email OTP.")
 
     # Validate the mobile OTP
-    if int(pending_data.get("mobile_otp", 0)) != data.mobile_otp:
-        logging.error("Invalid mobile OTP provided.")
-        raise HTTPException(status_code=422, detail="Invalid mobile OTP.")
+    # if int(pending_data.get("mobile_otp", 0)) != data.mobile_otp:
+    #     logging.error("Invalid mobile OTP provided.")
+    #     raise HTTPException(status_code=422, detail="Invalid mobile OTP.")
 
     # Both OTPs are valid; create the user record in the database.
     new_user = User(
@@ -312,16 +310,12 @@ async def get_profile(current_user: str = Depends(auth.get_current_user)):
 async def send_otp_api(
     request: schemas.SendOtpRequest, redis: redis_asyncio.Redis = Depends(get_redis)
 ):
-    # Normalize country code (remove any '+' characters)
-    country_code = request.country_code.replace("+", "")
-    mobile_number = request.mobile_number
-    logging.info(f"Send OTP request for {country_code}{mobile_number}")
+    email = request.email
+    logging.info(f"Send OTP request for {email}")
 
-    user = await User.find_one(
-        User.mobile_number == mobile_number, User.country_code == country_code
-    )
+    user = await User.find_one(User.email == email)
     if not user:
-        raise HTTPException(status_code=404, detail="Mobile number does not exist.")
+        raise HTTPException(status_code=404, detail="Email does not exist.")
 
     # Generate a 6-digit OTP.
     otp = random.randint(1000, 9999)
@@ -333,15 +327,12 @@ async def send_otp_api(
         "timestamp": current_time,
         "otp_retries": 0,
     }
-    key = otp_redis_key(country_code, mobile_number)
+    key = otp_redis_key(email)
     await redis.hset(key, mapping=otp_data)
     await redis.expire(key, OTP_EXPIRY_SECONDS)
-    user_data = {
-        "countryCode": country_code,
-        "mobileNumber": mobile_number,
-    }
+
     try:
-        await send_otp_service(user=user_data, otp=otp)
+        await send_email_otp(email, otp)
     except Exception as e:
         logging.error(f"Error sending OTP: {e}")
         raise HTTPException(
@@ -355,18 +346,17 @@ async def send_otp_api(
 async def resend_otp_api(
     request: schemas.SendOtpRequest, redis: redis_asyncio.Redis = Depends(get_redis)
 ):
-    country_code = request.country_code.replace("+", "")
-    mobile_number = request.mobile_number
-    logging.info(f"Resend OTP request for {country_code}{mobile_number}")
+    # country_code = request.country_code.replace("+", "")
+    # mobile_number = request.mobile_number
+    email = request.email
+    logging.info(f"Resend OTP request for {email}")
 
     # Ensure the user exists in the database.
-    user = await User.find_one(
-        User.mobile_number == mobile_number, User.country_code == country_code
-    )
+    user = await User.find_one(User.email == email)
     if not user:
         raise HTTPException(status_code=404, detail="Mobile number does not exist.")
 
-    key = otp_redis_key(country_code, mobile_number)
+    key = otp_redis_key(email)
     # Retrieve existing OTP data from Redis.
     otp_data = await redis.hgetall(key)
     otp_retries = int(otp_data.get("otp_retries", 0)) if otp_data else 0
@@ -383,12 +373,12 @@ async def resend_otp_api(
     await redis.hset(key, mapping=new_otp_data)
     await redis.expire(key, OTP_EXPIRY_SECONDS)
 
-    mobile_user = {
-        "countryCode": user.country_code,
-        "mobileNumber": user.mobile_number,
-    }
+    # mobile_user = {
+    #     "countryCode": user.country_code,
+    #     "mobileNumber": user.mobile_number,
+    # }
     try:
-        await send_otp_service(user=mobile_user, otp=otp)
+        await send_email_otp(email, otp)
     except Exception as e:
         logging.error(f"Error resending OTP: {e}")
         raise HTTPException(
@@ -402,21 +392,18 @@ async def resend_otp_api(
 async def verify_otp_api(
     request: schemas.VerifyOtpRequest, redis: redis_asyncio.Redis = Depends(get_redis)
 ):
-    country_code = request.country_code.replace("+", "")
-    mobile_number = request.mobile_number
+    # country_code = request.country_code.replace("+", "")
+    # mobile_number = request.mobile_number
+    email = request.email
     otp_input = request.otp
-    logging.info(
-        f"Verify OTP request for {country_code}{mobile_number} with OTP: {otp_input}"
-    )
+    logging.info(f"Verify OTP request for {email} with OTP: {otp_input}")
 
     # Ensure the user exists.
-    user = await User.find_one(
-        User.mobile_number == mobile_number, User.country_code == country_code
-    )
+    user = await User.find_one(User.email == email)
     if not user:
         raise HTTPException(status_code=404, detail="Mobile number does not exist.")
 
-    key = otp_redis_key(country_code, mobile_number)
+    key = otp_redis_key(email)
     otp_data = await redis.hgetall(key)
     if not otp_data:
         raise HTTPException(
@@ -479,7 +466,7 @@ async def upload_resume(
         unique_filename = generate_random_filename(original_filename)
 
         # 3) Upload to GCS
-        bucket_name = "prepsom-resume"  # replace with your actual bucket
+        bucket_name = "mockai-resume"
         storage_client = storage.Client()
         bucket = storage_client.bucket(bucket_name)
         blob = bucket.blob(unique_filename)
