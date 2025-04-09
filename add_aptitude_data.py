@@ -18,7 +18,7 @@ async def init_db():
     client = AsyncIOMotorClient(mongo_connection_string)
 
     # Get database name from env or use default
-    db_name = os.getenv("MONGODB_DB_NAME", "prepsom")
+    db_name = os.getenv("MONGO_DB_NAME", "mockai-tech")
 
     # Initialize beanie with the document models
     await init_beanie(database=client[db_name], document_models=[AptitudeQuestion])

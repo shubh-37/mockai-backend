@@ -84,7 +84,7 @@ async def login(employee: schemas.LoginEmployee):
 @router.get("/dashboard")
 async def get_interviews(current_user: str = Depends(auth.get_current_user)):
 
-    if current_user == "contact@prepsom.com":
+    if current_user == "support@mockai.tech":
         all_interviews = await Interview.find_all().to_list()
     else:
         employee = await Employee.find_one(Employee.email == current_user)

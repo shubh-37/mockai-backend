@@ -28,5 +28,5 @@ class User(Document):
     def resume_url(self) -> Optional[str]:
         if not self.resume:
             return None
-        bucket_name = "prepsom-resume"
+        bucket_name = "mockai-resume"
         return f"https://storage.googleapis.com/{bucket_name}/{self.resume}"

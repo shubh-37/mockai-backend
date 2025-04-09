@@ -30,7 +30,7 @@ import librosa
 router = APIRouter()
 client = texttospeech.TextToSpeechClient()
 storage_client = storage.Client()
-BUCKET_NAME = "prepsom-resume"
+BUCKET_NAME = "mockai-resume"
 razorpay_client = razorpay.Client(
     auth=(os.getenv("RAZORPAY_KEY_ID"), os.getenv("RAZORPAY_KEY_SECRET"))
 )
@@ -60,7 +60,9 @@ async def start_interview(
     if db_user.organization:
         company_doc = await db_user.organization.fetch()
 
-    company_logo = company_doc.logo if company_doc and company_doc.logo else "Prepsom"
+    company_logo = (
+        company_doc.logo if company_doc and company_doc.logo else "MockAI Tech"
+    )
 
     resume_path = None
     if db_user.resume:  # Ensure resume filename exists
@@ -576,7 +578,7 @@ async def proceed_payment(
             status_code=403, detail="Cannot pay for another user's interview."
         )
 
-    order_amount_paise = 9900
+    order_amount_paise = 1900
     order_data = {
         "amount": order_amount_paise,
         "currency": "INR",
@@ -628,7 +630,7 @@ async def verify_payment(
 
     new_payment = Payment(
         transaction_id=payload.payment_id,
-        amount=payload.reviews_bought * 99.0,  # e.g. 1 review = 100 INR
+        amount=payload.reviews_bought * 19.0,  # e.g. 1 review = 100 INR
         payment_date=datetime.utcnow().date(),
         user_id=db_user,
         reviews_bought=payload.reviews_bought,
