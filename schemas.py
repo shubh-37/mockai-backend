@@ -96,7 +96,6 @@ class QuizSubmissionRequest(BaseModel):
 class VerifySignupOTPRequest(BaseModel):
     email: str
     email_otp: int
-    mobile_otp: int
 
 
 class VerifyOtpResponse(BaseModel):
@@ -109,13 +108,11 @@ class AboutRequest(BaseModel):
 
 
 class SendOtpRequest(BaseModel):
-    mobile_number: str
-    country_code: Optional[str] = "91"
+    email: str
 
 
 class VerifyOtpRequest(BaseModel):
-    mobile_number: str
-    country_code: Optional[str] = "91"
+    email: str
     otp: int
 
 
