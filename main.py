@@ -9,6 +9,9 @@ from services import company_service
 from services import aptitude_service
 import redis.asyncio as redis_asyncio
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logging.getLogger("pymongo").setLevel(logging.WARNING)
 

@@ -26,6 +26,9 @@ import os
 import razorpay
 from google.cloud import texttospeech, storage
 import librosa
+from dotenv import load_dotenv
+
+load_dotenv()
 
 router = APIRouter()
 client = texttospeech.TextToSpeechClient()

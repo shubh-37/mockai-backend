@@ -3,6 +3,9 @@ from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Configurations
 SECRET_KEY = os.getenv("SECRET_KEY")  # Use a strong secret key
