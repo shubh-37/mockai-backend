@@ -2,7 +2,7 @@ from fastapi import Depends, HTTPException, APIRouter, Query, File, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from models.company import Company
 import tempfile
-import requests
+import httpx
 from models.interview import (
     Interview,
     QuestionResponse,
@@ -392,7 +392,8 @@ async def transcribe_audio(
         }
         files = {"file": ("recording.wav", audio_file, "audio/wav")}
 
-        response = requests.post(url, headers=headers, data=data, files=files)
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, headers=headers, data=data, files=files)
         response_json = response.json()
 
     except Exception as e:
