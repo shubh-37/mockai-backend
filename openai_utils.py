@@ -83,42 +83,94 @@ class FeedbackInput(BaseModel):
 #     return LLMChain(llm=llm, prompt=prompt)
 
 
+# def create_dynamic_question_agent():
+#     template = """
+#         Greet the candidate warmly in real time. Start by asking an introductory question that prompts the candidate to introduce themselves.
+
+#         Then, generate 9 additional *unique and well-structured* interview questions for a candidate applying for the role of {job_role} at {company} in the field of {field}, with {years_of_experience} years of experience.
+
+#         The questions should be *balanced* as follows:
+#         - At least *three* deeply *technical* questions that test core expertise based on the candidate's resume ({resume}).
+#         - The remaining *six* should assess *problem-solving, frameworks/tools proficiency, real-world application, best practices, debugging, and cultural fit*.
+
+#         Structure:
+#         1. *(Introductory Question)* Ask the candidate to introduce themselves.
+#         2. *(Technical Question 1)* In-depth technical question testing core expertise.
+#         3. *(Technical Question 2)* Another technical question, focusing on a different key skill.
+#         4. *(Technical Question 3)* Advanced or specialized technical scenario.
+#         5. *(Problem-Solving Scenario)* Real-world problem the candidate might face in this role.
+#         6. *(Best Practices & Optimization)* Question assessing industry best practices.
+#         7. *(Frameworks & Tools)* Evaluates proficiency with key technologies mentioned in the resume.
+#         8. *(Debugging & Edge Cases)* A scenario requiring troubleshooting and debugging skill in particular job field based on resume.
+#         9. *(New Trends & Innovation)* Checks awareness of emerging trends in the field.
+#         10. *(Cultural Fit & Teamwork)* Evaluates how well the candidate aligns with company values and teamwork skills.
+
+#         Return a JSON object in the following format (with no placeholder text):
+#         {{
+#         "greeting": "Your warm greeting message",
+#         "questions": [
+#             "Introductory question: Ask the candidate to introduce themselves.",
+#             "Question 2: (Technical question testing deep expertise)",
+#             "Question 3: (Technical question on a different skill)",
+#             "Question 4: (Advanced or specialized technical scenario)",
+#             "Question 5: (Problem-solving scenario relevant to the job role)",
+#             "Question 6: (Best practices & optimization techniques)",
+#             "Question 7: (Frameworks/tools proficiency)",
+#             "Question 8: (Debugging & edge case handling)",
+#             "Question 9: (New trends in the field & future-proofing knowledge)",
+#             "Question 10: (Cultural fit, teamwork, or leadership skills)"
+#         ]
+#         }}
+#         """
+#     prompt = PromptTemplate(
+#         template=template,
+#         input_variables=[
+#             "job_role",
+#             "company",
+#             "resume",
+#             "years_of_experience",
+#             "field",
+#         ],
+#     )
+#     return LLMChain(llm=llm, prompt=prompt)
+
+
 def create_dynamic_question_agent():
     template = """
-        Greet the candidate warmly in real time. Start by asking an introductory question that prompts the candidate to introduce themselves.
-        
-        Then, generate 9 additional *unique and well-structured* interview questions for a candidate applying for the role of {job_role} at {company} in the field of {field}, with {years_of_experience} years of experience.
+        Greet the candidate warmly in real time. Start by asking a friendly, conversational introductory question that prompts the candidate to introduce themselves.
 
-        The questions should be *balanced* as follows:
-        - At least *three* deeply *technical* questions that test core expertise based on the candidate's resume ({resume}).
-        - The remaining *six* should assess *problem-solving, frameworks/tools proficiency, real-world application, best practices, debugging, and cultural fit*.
+        Then, generate 9 additional unique and well-structured interview questions for a candidate applying for the role of {job_role} at {company} in the field of {field}, with {years_of_experience} years of experience.
+
+        The questions should be balanced as follows:
+        - At least three deeply technical questions that test core expertise based on the candidate's resume ({resume}).
+        - The remaining six should assess problem-solving, frameworks/tools proficiency, real-world application, best practices, debugging, and cultural fit.
 
         Structure:
-        1. *(Introductory Question)* Ask the candidate to introduce themselves.
-        2. *(Technical Question 1)* In-depth technical question testing core expertise.
-        3. *(Technical Question 2)* Another technical question, focusing on a different key skill.
-        4. *(Technical Question 3)* Advanced or specialized technical scenario.
-        5. *(Problem-Solving Scenario)* Real-world problem the candidate might face in this role.
-        6. *(Best Practices & Optimization)* Question assessing industry best practices.
-        7. *(Frameworks & Tools)* Evaluates proficiency with key technologies mentioned in the resume.
-        8. *(Debugging & Edge Cases)* A scenario requiring troubleshooting and debugging skill in particular job field based on resume.
-        9. *(New Trends & Innovation)* Checks awareness of emerging trends in the field.
-        10. *(Cultural Fit & Teamwork)* Evaluates how well the candidate aligns with company values and teamwork skills.
+        1. Ask the candidate to introduce themselves in a natural, friendly way.
+        2. Ask a specific, deeply technical question based on the resume to assess core expertise.
+        3. Ask a technical question focused on a different relevant skill or area of expertise.
+        4. Pose an advanced or specialized technical scenario to assess depth of knowledge.
+        5. Present a realistic problem-solving scenario they might face in this role.
+        6. Ask a question that assesses understanding of industry best practices or optimization strategies.
+        7. Evaluate proficiency with key frameworks/tools mentioned in the resume.
+        8. Present a debugging or edge-case troubleshooting scenario relevant to the job field.
+        9. Ask a question that explores knowledge of current trends or innovations in the field.
+        10. Ask a question that evaluates cultural fit, communication, or teamwork skills in the workplace.
 
         Return a JSON object in the following format (with no placeholder text):
         {{
         "greeting": "Your warm greeting message",
         "questions": [
-            "Introductory question: Ask the candidate to introduce themselves.",
-            "Question 2: (Technical question testing deep expertise)",
-            "Question 3: (Technical question on a different skill)",
-            "Question 4: (Advanced or specialized technical scenario)",
-            "Question 5: (Problem-solving scenario relevant to the job role)",
-            "Question 6: (Best practices & optimization techniques)",
-            "Question 7: (Frameworks/tools proficiency)",
-            "Question 8: (Debugging & edge case handling)",
-            "Question 9: (New trends in the field & future-proofing knowledge)",
-            "Question 10: (Cultural fit, teamwork, or leadership skills)"
+            "Conversational introductory question...",
+            "Fully-formed technical question 1...",
+            "Fully-formed technical question 2...",
+            "Advanced technical scenario question...",
+            "Real-world problem-solving scenario...",
+            "Best practices and optimization question...",
+            "Frameworks/tools proficiency question...",
+            "Debugging or edge case handling scenario...",
+            "Trends/innovation awareness question...",
+            "Cultural fit or teamwork question..."
         ]
         }}
         """
