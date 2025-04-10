@@ -7,3 +7,6 @@ auth_file/
 tmp_*
 env.bat
 prepsom-key.json
+.env
+key.json
+.gitignore
