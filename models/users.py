@@ -29,4 +29,6 @@ class User(Document):
         if not self.resume:
             return None
         bucket_name = "mockai-resume"
-        return f"https://storage.googleapis.com/{bucket_name}/{self.resume}"
+        region = "ap-south-1"
+
+        return f"https://{bucket_name}.s3.{region}.amazonaws.com/{self.resume}"

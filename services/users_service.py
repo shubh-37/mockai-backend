@@ -6,13 +6,12 @@ from models.user_aptitude import UserAptitude
 from models.interview import Interview
 import schemas, auth
 import logging
-from google.cloud import storage
 import json
 from typing import List
 from datetime import datetime
 import os
-import urllib.parse
-import httpx
+import boto3
+from io import BytesIO
 import random
 import string
 import time
@@ -459,7 +458,6 @@ async def get_companies():
 async def upload_resume(
     file: UploadFile = File(...), current_user: str = Depends(auth.get_current_user)
 ):
-
     user_doc = await User.find_one(User.email == current_user)
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found.")
@@ -468,13 +466,22 @@ async def upload_resume(
         original_filename = file.filename or "resume"
         unique_filename = generate_random_filename(original_filename)
 
-        # 3) Upload to GCS
         bucket_name = "mockai-resume"
-        storage_client = storage.Client()
-        bucket = storage_client.bucket(bucket_name)
-        blob = bucket.blob(unique_filename)
+        s3_client = boto3.client(
+            "s3",
+            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=os.getenv("AWS_ACCESS_SECRET_KEY"),
+            region_name=os.getenv("AWS_ACCESS_REGION"),
+        )
+        file_content = await file.read()
+        await file.seek(0)
 
-        blob.upload_from_file(file.file, content_type=file.content_type)
+        s3_client.upload_fileobj(
+            BytesIO(file_content),
+            bucket_name,
+            unique_filename,
+            ExtraArgs={"ContentType": file.content_type},
+        )
 
         user_doc.resume = unique_filename
         await user_doc.save()
@@ -482,7 +489,7 @@ async def upload_resume(
         return {"message": "Resume uploaded successfully."}
 
     except Exception as e:
-        logging.exception("Error uploading resume to GCS.")
+        logging.exception("Error uploading resume to AWS S3.")
         raise HTTPException(
             status_code=500,
             detail=f"Error uploading resume. Please try again later. {str(e)}",
