@@ -134,9 +134,12 @@ class Interview(Document):
 
     free_review: Optional[FreeReview] = None
     paid_review: Optional[PaidReview] = None
-    user_data: Optional[dict] = Field(
-        default=None,
+    user_data: Optional[dict] = (
+        Field(
+            default=None,
+        ),
     )
+    completion_percentage: Optional[float] = None
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     class Settings:
