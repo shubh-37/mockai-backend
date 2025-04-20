@@ -8,6 +8,7 @@ from langchain_community.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import LLMChain
+import json
 
 # Load environment variables
 load_dotenv()
@@ -353,44 +354,137 @@ def generate_initial_question(
 #     return LLMChain(llm=llm, prompt=prompt)
 
 
-def create_feedback_analysis_agent():
-    template = """
-You are a highly experienced interview evaluator. Based on the candidate's interview responses provided below as JSON, generate a detailed and realistic JSON report that strictly follows the FreeReview schema. 
+# def create_feedback_analysis_agent():
+#     template = """
+# You are a highly experienced interview evaluator. Based on the candidate's interview responses provided below as JSON, generate a detailed and realistic JSON report that strictly follows the FreeReview schema.
 
-Ensure that:
-1. The overall score is calculated realistically, factoring in both answered and unanswered questions.
-2. The question completion rate is accurately derived from the number of responses provided.
-3. The overall summary is tailored based on the responses, avoiding generic statements like "You're good at XYZ technology" unless explicitly supported.
-4. Always generate exactly three strengths and three weaknesses, even if inferred from minimal responses.
-5. *If a response is missing for any question, infer a likely transcript and relevant parameters based on the question type, but do not overinflate performance scores. Ensure every question has a transcript, fluency score, confidence score, filler words, response time, and clarity score.*
+# Ensure that:
+# 1. The overall score is calculated realistically, factoring in both answered and unanswered questions.
+# 2. The question completion rate is accurately derived from the number of responses provided.
+# 3. The overall summary is tailored based on the responses, avoiding generic statements like "You're good at XYZ technology" unless explicitly supported.
+# 4. Always generate exactly three strengths and three weaknesses, even if inferred from minimal responses.
+# 5. *If a response is missing for any question, infer a likely transcript and relevant parameters based on the question type, but do not overinflate performance scores. Ensure every question has a transcript, fluency score, confidence score, filler words, response time, and clarity score.*
+
+# Candidate Responses:
+# {responses}
+
+# Output the JSON object exactly in the following format:
+# {{
+#   "overall_score": <realistic number between 0 and 100, reflecting completeness and performance>,
+#   "overall_summary": "<A concise 2-3 sentence summary addressing the candidate directly, highlighting key strengths and areas for improvement based on responses>",
+
+#   "skill_analysis": {{
+#      "communication_skills": {{
+#          "clarity": <number between 0 and 100>,
+#          "articulation": <number between 0 and 100>,
+#          "active_listening": <number between 0 and 100>
+#      }},
+#      "conceptual_understanding": {{
+#          "fundamental_concepts": <number between 0 and 100>,
+#          "theoretical_application": <number between 0 and 100>,
+#          "analytical_reasoning": <number between 0 and 100>
+#      }},
+#      "speech_analysis": {{
+#          "avg_filler_words_used": <integer>,
+#          "avg_confidence_level": "<High|Medium|Low>",
+#          "avg_fluency_rate": <number between 0 and 100>
+#      }},
+#      "time_management": {{
+#          "average_response_time": "<string, e.g., '45 seconds'>",
+#          "question_completion_rate": <realistic number between 0 and 100, based on answered questions>
+#      }}
+#   }},
+#   "strengths_and_weaknesses": [
+#      {{
+#         "type": "strength",
+#         "title": "<title for strength>",
+#         "description": "<description of the strength>"
+#      }},
+#      {{
+#         "type": "strength",
+#         "title": "<title for additional strength>",
+#         "description": "<description of the additional strength>"
+#      }},
+#      {{
+#         "type": "strength",
+#         "title": "<title for another strength>",
+#         "description": "<description of the strength>"
+#      }},
+#      {{
+#         "type": "weakness",
+#         "title": "<title for weakness>",
+#         "description": "<description of the weakness>"
+#      }},
+#      {{
+#         "type": "weakness",
+#         "title": "<title for additional weakness>",
+#         "description": "<description of the additional weakness>"
+#      }},
+#      {{
+#         "type": "weakness",
+#         "title": "<title for another weakness>",
+#         "description": "<description of the weakness>"
+#      }}
+#   ]
+# }}
+
+# If most responses are missing, infer realistic approximate values based on context, ensuring every question has a complete set of transcript data and evaluation metrics, but do not overinflate scores.
+#     """
+#     prompt = PromptTemplate(template=template, input_variables=["responses"])
+#     return LLMChain(llm=llm, prompt=prompt)
+
+
+def create_feedback_analysis_agent():
+
+    try:
+        responses_dict = json.loads(responses)
+    except Exception:
+        responses_dict = {}
+
+    total_questions = len(responses_dict)
+    answered_questions = sum(1 for answer in responses_dict.values() if answer.strip())
+
+    template = """
+You are a highly experienced interview evaluator. Based on the candidate's interview responses provided below as JSON, generate a detailed and realistic JSON report that strictly follows the FreeReview schema.
+
+Important details:
+1. Each answered question should be evaluated individually and assigned a score out of 10 based on quality, clarity, and relevance. Unanswered questions receive a score of 0.
+2. The overall score is the sum of the individual question scores.
+3. The overall summary should directly reflect the analysis of each answered question and include specific, actionable feedback.
+4. The skill analysis (communication_skills, conceptual_understanding, speech_analysis, time_management) must also account for the ratio of answered questions.
+5. Always generate exactly three strengths and three weaknesses based on the candidate's responses.
+6. Include the ratio of answered questions to total questions in the time_management analysis ("question_completion_rate") using the following data:
+   - Total Questions: {total_questions}
+   - Answered Questions: {answered_questions}
+7. Use the candidate responses below to infer and provide specific, actionable feedback for each area.
 
 Candidate Responses:
 {responses}
 
 Output the JSON object exactly in the following format:
 {{
-  "overall_score": <realistic number between 0 and 100, reflecting completeness and performance>,
-  "overall_summary": "<A concise 2-3 sentence summary addressing the candidate directly, highlighting key strengths and areas for improvement based on responses>",
+  "overall_score": <realistic number between 0 and {max_score}>,
+  "overall_summary": "<A concise 2-3 sentence summary addressing the candidate directly, highlighting key strengths and areas for improvement>",
   
   "skill_analysis": {{
      "communication_skills": {{
-         "clarity": <number between 0 and 100>,
-         "articulation": <number between 0 and 100>,
-         "active_listening": <number between 0 and 100>
+         "clarity": <number between 0 and 100 scaled by answered ratio>,
+         "articulation": <number between 0 and 100 scaled by answered ratio>,
+         "active_listening": <number between 0 and 100 scaled by answered ratio>
      }},
      "conceptual_understanding": {{
-         "fundamental_concepts": <number between 0 and 100>,
-         "theoretical_application": <number between 0 and 100>,
-         "analytical_reasoning": <number between 0 and 100>
+         "fundamental_concepts": <number between 0 and 100 scaled by answered ratio>,
+         "theoretical_application": <number between 0 and 100 scaled by answered ratio>,
+         "analytical_reasoning": <number between 0 and 100 scaled by answered ratio>
      }},
      "speech_analysis": {{
          "avg_filler_words_used": <integer>,
          "avg_confidence_level": "<High|Medium|Low>",
-         "avg_fluency_rate": <number between 0 and 100>
+         "avg_fluency_rate": <number between 0 and 100 scaled by answered ratio>
      }},
      "time_management": {{
          "average_response_time": "<string, e.g., '45 seconds'>",
-         "question_completion_rate": <realistic number between 0 and 100, based on answered questions>
+         "question_completion_rate": <percentage representing answered questions over total (0 to 100)>
      }}
   }},
   "strengths_and_weaknesses": [
@@ -426,10 +520,16 @@ Output the JSON object exactly in the following format:
      }}
   ]
 }}
+"""
+    # Fill in the placeholders in the template
+    filled_template = template.format(
+        responses=responses,
+        total_questions=total_questions,
+        answered_questions=answered_questions,
+        max_score=answered_questions * 10,
+    )
 
-If most responses are missing, infer realistic approximate values based on context, ensuring every question has a complete set of transcript data and evaluation metrics, but do not overinflate scores.
-    """
-    prompt = PromptTemplate(template=template, input_variables=["responses"])
+    prompt = PromptTemplate(template=filled_template, input_variables=[])
     return LLMChain(llm=llm, prompt=prompt)
 
 
