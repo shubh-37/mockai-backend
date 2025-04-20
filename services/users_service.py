@@ -531,8 +531,31 @@ async def dashboard(current_user: str = Depends(auth.get_current_user)):
         raise HTTPException(status_code=404, detail="User not found.")
 
     interviews = await Interview.find(Interview.user_id.id == user.id).to_list()
-    total_interviews = len(interviews)
 
+    interviews_list = []
+    for interview in interviews:
+        if interview.free_review:
+            interview_dict = {
+                "_id": str(interview.id),
+                "created_at": (
+                    interview.created_at.isoformat() if interview.created_at else None
+                ),
+                "job_role": (
+                    interview.user_data.get("job_role") if interview.user_data else None
+                ),
+                "overall_summary": (
+                    interview.free_review.overall_summary
+                    if hasattr(interview, "free_review") and interview.free_review
+                    else None
+                ),
+                "payment_status": (
+                    True
+                    if hasattr(interview, "payment_id") and interview.payment_id
+                    else None
+                ),
+            }
+            interviews_list.append(interview_dict)
+    total_interviews = len(interviews_list)
     if total_interviews > 0:
         avg_score = (
             sum(
@@ -647,30 +670,6 @@ async def dashboard(current_user: str = Depends(auth.get_current_user)):
         if past_aptitude_scores
         else 0
     )
-
-    # Convert interviews to list with only the needed fields
-    interviews_list = []
-    for interview in interviews:
-        interview_dict = {
-            "_id": str(interview.id),
-            "created_at": (
-                interview.created_at.isoformat() if interview.created_at else None
-            ),
-            "job_role": (
-                interview.user_data.get("job_role") if interview.user_data else None
-            ),
-            "overall_summary": (
-                interview.free_review.overall_summary
-                if hasattr(interview, "free_review") and interview.free_review
-                else None
-            ),
-            "payment_status": (
-                True
-                if hasattr(interview, "payment_id") and interview.payment_id
-                else None
-            ),
-        }
-        interviews_list.append(interview_dict)
 
     response = {
         "total_interviews": total_interviews,
