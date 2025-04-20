@@ -161,7 +161,22 @@ async def interview_convo(
             analysis_dict = qa.speech_analysis.model_dump()
             combined = {**combined, **analysis_dict}
 
-        responses_list.append(combined)  # Fix: Indented properly to be inside the loop
+        responses_list.append(combined)
+
+    answered_questions = sum(
+        1 for qa in interview_doc.question_responses if qa.speech_analysis is not None
+    )
+
+    # Check if there are at least 4 answered questions
+    if answered_questions < 4:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "message": "Not enough responses. At least 4 answers are required to submit the interview.",
+                "answered_count": answered_questions,
+                "total_questions": len(interview_doc.question_responses),
+            },
+        )
 
     responses_json = json.dumps(responses_list)
     logging.info(f"Responses JSON: {responses_json}")
@@ -190,17 +205,16 @@ async def interview_convo(
 
     interview_doc.free_review = FreeReview(**free_feedback)
     await interview_doc.save()
+    user_data = interview_doc.user_data.copy() if interview_doc.user_data else {}
+
+    user_data["date"] = (
+        interview_doc.created_at.isoformat() if interview_doc.created_at else None
+    )
     return JSONResponse(
         content={
             "message": "Interview submitted successfully.",
             "review": free_feedback,
-            "name": db_user.name,
-            "date": (
-                interview_doc.created_at.isoformat()
-                if interview_doc.created_at
-                else None
-            ),
-            "role": db_user.job_role,
+            "user_data": user_data,
         }
     )
 
@@ -227,6 +241,11 @@ async def interview_feedback(
             status_code=403,
             detail="This interview requires payment for detailed feedback.",
         )
+    user_data = interview_doc.user_data.copy() if interview_doc.user_data else {}
+
+    user_data["date"] = (
+        interview_doc.created_at.isoformat() if interview_doc.created_at else None
+    )
     if interview_doc.paid_review:
         paid_feedback = interview_doc.paid_review.dict()
 
@@ -272,7 +291,13 @@ async def interview_feedback(
                         }
                     )
 
-        return JSONResponse(content={"paid_review": paid_feedback})
+        return JSONResponse(
+            content={
+                "paid_review": paid_feedback,
+                "review": interview_doc.free_review.dict(),
+                "user_data": user_data,
+            }
+        )
 
     question_answer_list = []
     for qa in interview_doc.question_responses or []:
@@ -351,7 +376,13 @@ async def interview_feedback(
     interview_doc.paid_review = PaidReview(**paid_feedback)
     await interview_doc.save()
 
-    return JSONResponse(content={"paid_review": paid_feedback})
+    return JSONResponse(
+        content={
+            "paid_review": paid_feedback,
+            "review": interview_doc.free_review.dict(),
+            "user_data": user_data,
+        }
+    )
 
 
 @router.post("/transcribe")
@@ -582,7 +613,7 @@ async def proceed_payment(
             status_code=403, detail="Cannot pay for another user's interview."
         )
 
-    order_amount_paise = 1900
+    order_amount_paise = 2900
     order_data = {
         "amount": order_amount_paise,
         "currency": "INR",
@@ -634,7 +665,7 @@ async def verify_payment(
 
     new_payment = Payment(
         transaction_id=payload.payment_id,
-        amount=payload.reviews_bought * 19.0,  # e.g. 1 review = 100 INR
+        amount=payload.reviews_bought * 29.0,  # e.g. 1 review = 100 INR
         payment_date=datetime.utcnow().date(),
         user_id=db_user,
         reviews_bought=payload.reviews_bought,
