@@ -33,7 +33,8 @@ class SpeechAnalysisMetrics(Document):
 
 class TimeManagement(Document):
     average_response_time: Optional[str] = None  # e.g. "1 min 20s"
-    question_completion_rate: Optional[float] = None  # e.g. 95.0
+    question_completion_rate: Optional[float] = None
+    total_time_spent: Optional[str] = None  # e.g. 95.0
 
 
 class SkillAnalysis(Document):
@@ -107,6 +108,7 @@ class SpeechAnalysis(Document):
     filler_words: Optional[List[str]] = None
     time_seconds: Optional[float] = None
     clarity_score: Optional[float] = None
+    words_per_minute: Optional[float] = None
 
 
 class QuestionResponse(Document):
@@ -139,7 +141,7 @@ class Interview(Document):
             default=None,
         ),
     )
-    completion_percentage: Optional[float] = None
+    completion_percentage: Optional[float] = 0
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     class Settings:
