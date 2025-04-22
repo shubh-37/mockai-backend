@@ -11,7 +11,7 @@ class UserAptitude(Document):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     correct_no_of_questions: int
     wrong_no_of_answers: int
-    score: int
+    score: float
     user_id: Link[User]
     topics: Optional[list[str]] = None
 
