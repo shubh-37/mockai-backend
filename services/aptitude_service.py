@@ -3,6 +3,7 @@ from fastapi import Depends, HTTPException, APIRouter, Query
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Optional
 import random
+import re
 from models.aptitude_question import AptitudeQuestion
 from models.user_aptitude import UserAptitude
 from models.users import User
@@ -31,8 +32,9 @@ async def get_all_questions(topics: Optional[List[str]] = None):
         print(f"Processed topics: {processed_topics}")
 
     print(f"Query: {query}")
-    questions = await AptitudeQuestion.find(query).to_list()
-    if not questions:
+    questions_with_answers = await AptitudeQuestion.find(query).to_list()
+
+    if not questions_with_answers:
         if topics:
             display_topics = processed_topics if processed_topics else topics
             raise HTTPException(
@@ -43,14 +45,21 @@ async def get_all_questions(topics: Optional[List[str]] = None):
             raise HTTPException(
                 status_code=404, detail="No questions found in the database"
             )
-    print(f"Found {len(questions)} questions")
-    for question in questions:
+
+    print(f"Found {len(questions_with_answers)} questions")
+
+    # Create a new list instead of modifying the one we're iterating over
+    questions_without_answers = []
+    for question in questions_with_answers:
         question.id = str(question.id)
-    return questions
+        question_dict = question.dict()
+        question_dict.pop("answer", None)  # Remove the answer field
+        questions_without_answers.append(question_dict)
+    return questions_without_answers
 
 
 def get_balanced_quiz(
-    questions: List[AptitudeQuestion],
+    questions: List,
     total_questions: int,
     topics: Optional[List[str]] = None,
 ):
@@ -73,7 +82,7 @@ def get_balanced_quiz(
         available_topics = processed_topics
 
     # Group questions by level and topic
-    grouped_questions: Dict[str, Dict[str, List[AptitudeQuestion]]] = {
+    grouped_questions: Dict[str, Dict[str, List]] = {
         "Easy": {topic: [] for topic in available_topics},
         "Medium": {topic: [] for topic in available_topics},
         "Hard": {topic: [] for topic in available_topics},
@@ -81,8 +90,8 @@ def get_balanced_quiz(
 
     # Populate grouped_questions with questions that match the selected topics
     for question in questions:
-        if question.topic in available_topics:
-            grouped_questions[question.level][question.topic].append(question)
+        if question["topic"] in available_topics:
+            grouped_questions[question["level"]][question["topic"]].append(question)
 
     # Calculate the number of questions to select from each category
     num_topics = len(available_topics)
@@ -161,7 +170,7 @@ async def get_15_question_quiz(
 ):
     questions = await get_all_questions(topics)
     quiz = get_balanced_quiz(questions, 15, topics)
-    return JSONResponse(content=[q.dict() for q in quiz])
+    return JSONResponse(content=quiz)
 
 
 @router.get("/30", response_model=List[AptitudeQuestion])
@@ -171,7 +180,7 @@ async def get_30_question_quiz(
 ):
     questions = await get_all_questions(topics)
     quiz = get_balanced_quiz(questions, 30, topics)
-    return JSONResponse(content=[q.dict() for q in quiz])
+    return JSONResponse(content=quiz)
 
 
 @router.post("/submit", response_model=dict)
@@ -179,20 +188,96 @@ async def submit_quiz_result(
     quiz_data: schemas.QuizSubmissionRequest,
     current_user: str = Depends(auth.get_current_user),
 ):
-
     user = await User.find_one(User.email == current_user)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # Extract submitted answers and topics
+    answers = quiz_data.answers
+    topics = quiz_data.topics
+
+    # Fetch all the questions that were in the quiz to compare answers
+    question_ids = list(answers.keys())
+    quiz_questions = await AptitudeQuestion.find(
+        {"_id": {"$in": [ObjectId(qid) for qid in question_ids]}}
+    ).to_list()
+
+    # Create a dictionary for easy lookup of correct answers
+    question_map = {str(q.id): q for q in quiz_questions}
+
+    # Calculate score and prepare results
+    correct_answers = 0
+    wrong_answers = 0
+    unanswered = 0
+    results = []
+
+    for question_id, user_answer in answers.items():
+        # Skip if the question is not found in our database
+        if question_id not in question_map:
+            continue
+
+        # Get the correct answer for this question
+        correct_option = question_map[question_id].answer  # Format: (A), (B), etc.
+
+        # Get user's selected option
+        selected_option = user_answer.get("selectedOption")
+
+        result = {
+            "question_id": question_id,
+            "correct_answer": correct_option,
+            "selected_option": selected_option,
+        }
+
+        if selected_option is None:
+            unanswered += 1
+            result["isCorrect"] = False
+        else:
+            # Extract the letter from the selected option using regex
+            match = re.search(r"\((.)\)", selected_option)
+            if match:
+                selected_letter = match.group(1)  # Just 'A', 'B', etc.
+
+                # Compare directly with correct_option (which is also 'A', 'B', etc.)
+                is_correct = selected_letter == correct_option
+                result["isCorrect"] = is_correct
+
+                if is_correct:
+                    correct_answers += 1
+                else:
+                    wrong_answers += 1
+            else:
+                wrong_answers += 1
+                result["isCorrect"] = False
+
+        results.append(result)
+
+    # Calculate final score
+    total_questions = len(quiz_questions)
+    total_score = (
+        (correct_answers / total_questions) * 100 if total_questions > 0 else 0
+    )
+
+    # Create and save user aptitude record
     user_aptitude = UserAptitude(
-        correct_no_of_questions=quiz_data.correct_no_of_questions,
-        wrong_no_of_answers=quiz_data.wrong_no_of_answers,
-        score=quiz_data.score,
+        correct_no_of_questions=correct_answers,
+        wrong_no_of_answers=wrong_answers,
+        score=total_score,
         user_id=user,
-        topics=quiz_data.topics,
+        topics=topics,
     )
     await user_aptitude.insert()
-    return JSONResponse(content="Quiz response submitted successfully.")
+
+    return JSONResponse(
+        content={
+            "message": "Quiz response submitted successfully.",
+            "score": round(total_score, 2),  # Round score to 2 decimal places
+            "correct_answers": correct_answers,
+            "wrong_answers": wrong_answers,
+            "unanswered": unanswered,
+            "total_questions": total_questions,
+            "results": results,
+        }
+    )
 
 
 @router.get("/scores", response_model=List[UserAptitude])
