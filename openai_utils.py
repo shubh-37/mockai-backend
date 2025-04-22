@@ -10,7 +10,6 @@ from langchain.memory import ConversationBufferMemory
 from langchain.chains import LLMChain
 import json
 
-# Load environment variables
 load_dotenv()
 
 # Initialize FastAPI
@@ -435,101 +434,96 @@ def generate_initial_question(
 
 
 def create_feedback_analysis_agent():
-
-    try:
-        responses_dict = json.loads(responses)
-    except Exception:
-        responses_dict = {}
-
-    total_questions = len(responses_dict)
-    answered_questions = sum(1 for answer in responses_dict.values() if answer.strip())
-
     template = """
-You are a highly experienced interview evaluator. Based on the candidate's interview responses provided below as JSON, generate a detailed and realistic JSON report that strictly follows the FreeReview schema.
+You are a highly experienced and consistent interview evaluator. Based on the candidate's interview responses provided below as JSON, generate a detailed and structured JSON report that strictly follows the FreeReview schema.
 
-Important details:
-1. Each answered question should be evaluated individually and assigned a score out of 10 based on quality, clarity, and relevance. Unanswered questions receive a score of 0.
-2. The overall score is the sum of the individual question scores.
-3. The overall summary should directly reflect the analysis of each answered question and include specific, actionable feedback.
-4. The skill analysis (communication_skills, conceptual_understanding, speech_analysis, time_management) must also account for the ratio of answered questions.
-5. Always generate exactly three strengths and three weaknesses based on the candidate's responses.
-6. Include the ratio of answered questions to total questions in the time_management analysis ("question_completion_rate") using the following data:
-   - Total Questions: {total_questions}
-   - Answered Questions: {answered_questions}
-7. Use the candidate responses below to infer and provide specific, actionable feedback for each area.
+Key Instructions:
+1. Each answered question must be individually scored from 0 to 10 based on quality, clarity, and relevance. Unanswered questions = 0.
+2. The overall score = sum of individual question scores. Maximum possible score is {max_score}.
+3. The overall summary must reflect specific analysis and give the candidate 2-3 clear and constructive feedback points.
+4. Skill analysis must consider:
+   - Ratio of answered questions
+   - Language and structure of responses
+   - Fluency, use of filler words, logical flow
+5. Estimate “active_listening” based on how well the candidate addresses the core of each question and references keywords or follow-ups.
+6. Avoid random zeros. Use qualitative reasoning for each score and skill metric.
+7. Include exactly 3 strengths and 3 weaknesses based on real patterns in the responses.
+8. Include completion rate as: (answered_questions / total_questions) * 100, rounded to integer.
 
 Candidate Responses:
 {responses}
 
-Output the JSON object exactly in the following format:
+Output the JSON object in exactly this format:
 {{
-  "overall_score": <realistic number between 0 and {max_score}>,
-  "overall_summary": "<A concise 2-3 sentence summary addressing the candidate directly, highlighting key strengths and areas for improvement>",
+  "overall_score": <realistic total score from 0 to {max_score}>,
+  "overall_summary": "<2-3 sentence feedback directly to candidate>",
   
   "skill_analysis": {{
      "communication_skills": {{
-         "clarity": <number between 0 and 100 scaled by answered ratio>,
-         "articulation": <number between 0 and 100 scaled by answered ratio>,
-         "active_listening": <number between 0 and 100 scaled by answered ratio>
+         "clarity": <0-100, scale with completion rate>,
+         "articulation": <0-100, based on how well structured their sentences and use of language are>,
+         "active_listening": <0-100, based on attention to question intent and completeness of answers>
      }},
      "conceptual_understanding": {{
-         "fundamental_concepts": <number between 0 and 100 scaled by answered ratio>,
-         "theoretical_application": <number between 0 and 100 scaled by answered ratio>,
-         "analytical_reasoning": <number between 0 and 100 scaled by answered ratio>
+         "fundamental_concepts": <0-100, based on correctness of core ideas>,
+         "theoretical_application": <0-100, scale with real-world application>,
+         "analytical_reasoning": <0-100, based on how logically responses are framed>
      }},
      "speech_analysis": {{
-         "avg_filler_words_used": <integer>,
-         "avg_confidence_level": "<High|Medium|Low>",
-         "avg_fluency_rate": <number between 0 and 100 scaled by answered ratio>
+         "avg_filler_words_used": <integer, estimated count across responses>,
+         "avg_confidence_level": "<High|Medium|Low>", 
+         "avg_fluency_rate": <0-100, based on flow of language and sentence construction>
      }},
      "time_management": {{
-         "average_response_time": "<string, e.g., '45 seconds'>",
-         "question_completion_rate": <percentage representing answered questions over total (0 to 100)>
+         "average_response_time": "<e.g., '35 seconds'>",
+         "question_completion_rate": <int: percentage of answered questions>
+         "total_time_spent": "<e.g., '3 minutes 4 seconds'>"
      }}
   }},
   "strengths_and_weaknesses": [
      {{
         "type": "strength",
-        "title": "<title for strength>",
-        "description": "<description of the strength>"
+        "title": "<strength title>",
+        "description": "<detailed explanation>"
      }},
      {{
         "type": "strength",
-        "title": "<title for additional strength>",
-        "description": "<description of the additional strength>"
+        "title": "<another strength title>",
+        "description": "<detailed explanation>"
      }},
      {{
         "type": "strength",
-        "title": "<title for another strength>",
-        "description": "<description of the strength>"
+        "title": "<another strength title>",
+        "description": "<detailed explanation>"
      }},
      {{
         "type": "weakness",
-        "title": "<title for weakness>",
-        "description": "<description of the weakness>"
+        "title": "<weakness title>",
+        "description": "<detailed explanation>"
      }},
      {{
         "type": "weakness",
-        "title": "<title for additional weakness>",
-        "description": "<description of the additional weakness>"
+        "title": "<another weakness title>",
+        "description": "<detailed explanation>"
      }},
      {{
         "type": "weakness",
-        "title": "<title for another weakness>",
-        "description": "<description of the weakness>"
+        "title": "<another weakness title>",
+        "description": "<detailed explanation>"
      }}
   ]
 }}
 """
-    # Fill in the placeholders in the template
-    filled_template = template.format(
-        responses=responses,
-        total_questions=total_questions,
-        answered_questions=answered_questions,
-        max_score=answered_questions * 10,
-    )
 
-    prompt = PromptTemplate(template=filled_template, input_variables=[])
+    prompt = PromptTemplate(
+        template=template,
+        input_variables=[
+            "responses",
+            "total_questions",
+            "answered_questions",
+            "max_score",
+        ],
+    )
     return LLMChain(llm=llm, prompt=prompt)
 
 
@@ -589,9 +583,16 @@ If the candidate's responses are insufficient, infer and provide approximate rea
     return LLMChain(llm=llm, prompt=prompt)
 
 
-def generate_feedback(qaa: str):
+def generate_feedback(qaa: str, total: int, answered: int, max_score: int):
     agent = create_feedback_analysis_agent()
-    return agent.invoke({"responses": qaa})
+    return agent.invoke(
+        {
+            "responses": qaa,
+            "total_questions": total,
+            "answered_questions": answered,
+            "max_score": max_score,
+        }
+    )
 
 
 def generate_feedback_paid(qaa: str, years_of_experience: int):
