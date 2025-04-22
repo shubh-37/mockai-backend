@@ -41,8 +41,8 @@ razorpay_client = razorpay.Client(
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 
-@router.get("/start_interview", response_model=schemas.InterviewOut)
-async def start_interview(
+@router.post("/create_interview", response_model=schemas.InterviewCreateOut)
+async def create_interview(
     current_user: str = Depends(auth.get_current_user),
     aptitude_id: str = Query(None),
 ):
@@ -67,13 +67,70 @@ async def start_interview(
         company_doc.logo if company_doc and company_doc.logo else "MockAI Tech"
     )
 
+    interview_doc = Interview(
+        user_id=db_user,
+        company_id=company_doc if company_doc else None,
+        user_aptitude_id=linked_aptitude if linked_aptitude else None,
+        question_responses=[],
+        user_data={
+            "job_role": db_user.job_role,
+            "years_of_experience": db_user.years_of_experience,
+            "field": db_user.field,
+        },
+    )
+
+    await interview_doc.insert()
+
+    return JSONResponse(
+        content={
+            "interview_id": str(interview_doc.id),
+            "company_logo": company_logo,
+        }
+    )
+
+
+@router.post("/generate_questions", response_model=schemas.InterviewQuestionsOut)
+async def generate_questions(
+    interview_id: str = Query(...),
+    current_user: str = Depends(auth.get_current_user),
+):
+    db_user = await User.find_one(User.email == current_user)
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    try:
+        interview_obj_id = ObjectId(interview_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Invalid interview_id") from e
+
+    interview_doc = await Interview.get(interview_obj_id)
+    if not interview_doc:
+        raise HTTPException(status_code=404, detail="Interview not found.")
+    logging.info(str(interview_doc.user_id.ref.id))
+    logging.info(str(db_user.id))
+    if str(interview_doc.user_id.ref.id) != str(db_user.id):
+        raise HTTPException(
+            status_code=403, detail="Not authorized to access this interview."
+        )
+
+    # Check if questions already exist
+    if interview_doc.question_responses and len(interview_doc.question_responses) > 0:
+
+        return JSONResponse(
+            content={
+                "questions": [q.dict() for q in interview_doc.question_responses],
+                "interview_id": str(interview_doc.id),
+                "completion_percentage": interview_doc.completion_percentage,
+            }
+        )
+
+    # If no existing questions, generate new ones
     resume_path = None
-    if db_user.resume:  # Ensure resume filename exists
+    if db_user.resume:
         try:
             bucket = storage_client.bucket(BUCKET_NAME)
             blob = bucket.blob(db_user.resume)
 
-            # Create a temporary file to store the resume
             temp_dir = tempfile.gettempdir()
             resume_path = os.path.join(temp_dir, db_user.resume)
 
@@ -111,25 +168,14 @@ async def start_interview(
     for q in question_list:
         question_responses.append(QuestionResponse(question=q))
 
-    interview_doc = Interview(
-        user_id=db_user,
-        company_id=company_doc if company_doc else None,
-        user_aptitude_id=linked_aptitude if linked_aptitude else None,
-        question_responses=question_responses,
-        user_data={
-            "job_role": db_user.job_role,
-            "years_of_experience": db_user.years_of_experience,
-            "field": db_user.field,
-        },
-    )
-
-    await interview_doc.insert()
+    interview_doc.question_responses = question_responses
+    await interview_doc.save()
 
     return JSONResponse(
         content={
             "questions": [q.dict() for q in question_responses],
-            "interview_id": str(interview_doc.id),  # cast ObjectId to string
-            "company_logo": company_logo,
+            "interview_id": str(interview_doc.id),
+            "completion_percentage": 0,
         }
     )
 
@@ -153,6 +199,15 @@ async def interview_convo(
     interview_doc = await Interview.get(interview_obj_id)
     if not interview_doc:
         raise HTTPException(status_code=404, detail="Interview not found.")
+
+    if interview_doc.free_review:
+        return JSONResponse(
+            content={
+                "message": "Interview already submitted.",
+                "review": interview_doc.free_review,
+                "user_data": interview_doc.user_data,
+            }
+        )
     responses_list = []
     for qa in interview_doc.question_responses:
         combined = {"question_id": qa.question_id, "question": qa.question}
@@ -179,9 +234,13 @@ async def interview_convo(
         )
 
     responses_json = json.dumps(responses_list)
-    logging.info(f"Responses JSON: {responses_json}")
     try:
-        free_feedback_raw = openai_utils.generate_feedback(responses_json)
+        free_feedback_raw = openai_utils.generate_feedback(
+            responses_json,
+            len(interview_doc.question_responses),
+            answered_questions,
+            answered_questions * 10,
+        )
 
         # Handle the case when the response could be a string or dict with nested structure
         if isinstance(free_feedback_raw, str):
@@ -258,6 +317,7 @@ async def interview_feedback(
                     "clarity_score": qa.speech_analysis.clarity_score,
                     "filler_words": qa.speech_analysis.filler_words,
                     "time_seconds": qa.speech_analysis.time_seconds,
+                    "words_per_minute": qa.speech_analysis.words_per_minute,
                     "answer": qa.speech_analysis.transcript,
                 }
 
@@ -276,6 +336,7 @@ async def interview_feedback(
                         "clarity_score",
                         "filler_words",
                         "time_seconds",
+                        "words_per_minute",
                         "answer",
                     ]
                 ):
@@ -288,6 +349,7 @@ async def interview_feedback(
                             "filler_words": [],
                             "time_seconds": None,
                             "answer": None,
+                            "words_per_minute": None,
                         }
                     )
 
@@ -336,6 +398,7 @@ async def interview_feedback(
                     "clarity_score": qa.speech_analysis.clarity_score,
                     "filler_words": qa.speech_analysis.filler_words,
                     "time_seconds": qa.speech_analysis.time_seconds,
+                    "words_per_minute": qa.speech_analysis.words_per_minute,
                     "answer": qa.speech_analysis.transcript,
                 }
 
@@ -354,6 +417,7 @@ async def interview_feedback(
                         "clarity_score",
                         "filler_words",
                         "time_seconds",
+                        "words_per_minute",
                         "answer",
                     ]
                 ):
@@ -365,6 +429,7 @@ async def interview_feedback(
                             "clarity_score": None,
                             "filler_words": [],
                             "time_seconds": None,
+                            "words_per_minute": None,
                             "answer": None,
                         }
                     )
@@ -389,6 +454,7 @@ async def interview_feedback(
 async def transcribe_audio(
     question_id: str = Query(...),
     interview_id: str = Query(...),
+    completion_percentage: str = Query(...),
     audio: UploadFile = File(...),
     current_user: str = Depends(auth.get_current_user),
 ):
@@ -473,7 +539,7 @@ async def transcribe_audio(
         raise HTTPException(
             status_code=404, detail="question_id not found in this interview"
         )
-
+    interview_doc.completion_percentage = int(completion_percentage)
     await interview_doc.save()
 
     return JSONResponse(
