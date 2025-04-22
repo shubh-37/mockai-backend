@@ -1,5 +1,4 @@
 from pydantic import BaseModel, EmailStr, field_validator, model_validator
-from fastapi import UploadFile
 import re
 from typing import Optional, List, Union
 
@@ -38,10 +37,14 @@ class UserProfile(BaseModel):
         return value
 
 
-class InterviewOut(BaseModel):
-    questions: List[str]
-    interview_id: int
+class InterviewCreateOut(BaseModel):
+    interview_id: str
     company_logo: str
+
+
+class InterviewQuestionsOut(BaseModel):
+    questions: List
+    interview_id: str
 
 
 class Message(BaseModel):
@@ -87,9 +90,7 @@ class TextToSpeechRequest(BaseModel):
 
 
 class QuizSubmissionRequest(BaseModel):
-    correct_no_of_questions: int
-    wrong_no_of_answers: int
-    score: int
+    answers: object
     topics: List[str]
 
 
