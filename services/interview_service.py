@@ -41,6 +41,102 @@ razorpay_client = razorpay.Client(
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 
+def analyze_speech(transcript_text, duration_seconds):
+    """Analyze speech transcript and return metrics."""
+    if not transcript_text or duration_seconds <= 0:
+        return {
+            "fluency_score": 0.0,
+            "confidence_score": 0.0,
+            "clarity_score": 0.0,
+            "words_per_minute": 0.0,
+            "filler_word_counts": {},
+            "total_filler_count": 0,
+            "filler_frequency": 0.0,
+        }
+
+    # List of common filler words/phrases
+    filler_list = [
+        "um",
+        "uh",
+        "like",
+        "so",
+        "you know",
+        "er",
+        "ah",
+        "hmm",
+        "well",
+        "actually",
+    ]
+
+    # Clean transcript and split into words
+    words = transcript_text.lower().split()
+    word_count = len(words)
+
+    # Calculate words per minute
+    words_per_minute = (word_count / duration_seconds) * 60
+
+    # Count each filler word (full word matches only)
+    filler_word_counts = {}
+    total_filler_count = 0
+
+    # Check complete words only (not substrings)
+    for word in words:
+        # Clean the word of punctuation
+        clean_word = word.strip(".,!?;:'\"()[]{}").lower()
+        if clean_word in filler_list:
+            filler_word_counts[clean_word] = filler_word_counts.get(clean_word, 0) + 1
+            total_filler_count += 1
+
+    # Also check for multi-word fillers like "you know"
+    transcript_lower = transcript_text.lower()
+    for filler in filler_list:
+        if " " in filler:  # it's a multi-word filler
+            count = transcript_lower.count(filler)
+            if count > 0:
+                filler_word_counts[filler] = count
+                total_filler_count += count
+
+    # Calculate filler frequency (fillers per 100 words)
+    filler_frequency = (total_filler_count / word_count * 100) if word_count > 0 else 0
+
+    # Calculate speech metrics
+    # Fluency: penalize based on filler word frequency (how many fillers per 100 words)
+    # - 0% fillers = 100 score
+    # - 10% fillers = 50 score
+    # - 20%+ fillers = 0 score
+    fluency_score = max(0.0, 100.0 - (filler_frequency * 5.0))
+
+    # Confidence: Based on speaking rate and filler usage
+    # Speaking rate component (40% of score)
+    # Optimal range is ~120-160 WPM, with penalties for too slow or too fast
+    rate_score = 0
+    if words_per_minute < 80:
+        rate_score = words_per_minute / 2  # Slower speech gets lower score
+    elif words_per_minute <= 160:
+        rate_score = 40  # Optimal range gets full points
+    else:
+        rate_score = max(0, 40 - (words_per_minute - 160) / 10)  # Penalty for too fast
+
+    # Filler component (60% of score)
+    filler_score = max(0, 60 - (filler_frequency * 3))
+
+    # Combined confidence score
+    confidence_score = rate_score + filler_score
+
+    # Clarity: Penalize for filler words, but less harshly than fluency
+    clarity_score = max(0.0, 100.0 - (filler_frequency * 2.5))
+
+    return {
+        "fluency_score": round(fluency_score, 1),
+        "confidence_score": round(confidence_score, 1),
+        "clarity_score": round(clarity_score, 1),
+        "words_per_minute": round(words_per_minute, 1),
+        "filler_word_counts": filler_word_counts,
+        "total_filler_count": total_filler_count,
+        "filler_frequency": round(filler_frequency, 1),
+    }
+
+
 @router.post("/create_interview", response_model=schemas.InterviewCreateOut)
 async def create_interview(
     current_user: str = Depends(auth.get_current_user),
@@ -450,6 +546,105 @@ async def interview_feedback(
     )
 
 
+# @router.post("/transcribe")
+# async def transcribe_audio(
+#     question_id: str = Query(...),
+#     interview_id: str = Query(...),
+#     completion_percentage: str = Query(...),
+#     audio: UploadFile = File(...),
+#     current_user: str = Depends(auth.get_current_user),
+# ):
+#     db_user = await User.find_one(User.email == current_user)
+#     if not db_user:
+#         raise HTTPException(status_code=404, detail="User not found.")
+#     try:
+#         interview_obj_id = ObjectId(interview_id)
+#     except:
+#         raise HTTPException(status_code=400, detail="Invalid interview_id")
+
+#     interview_doc = await Interview.get(interview_obj_id)
+#     if not interview_doc:
+#         raise HTTPException(status_code=404, detail="Interview not found.")
+
+#     try:
+#         audio_bytes = await audio.read()
+#         audio_file = io.BytesIO(audio_bytes)
+#         audio_data, sample_rate = librosa.load(io.BytesIO(audio_bytes), sr=None)
+#         duration_seconds = librosa.get_duration(y=audio_data, sr=sample_rate)
+
+#     except Exception as e:
+#         logging.error("Could not decode audio with librosa. Error: %s", e)
+#         raise HTTPException(
+#             status_code=400,
+#             detail=f"Could not decode audio. Ensure valid format. Error: {str(e)}",
+#         )
+
+#     audio_file.seek(0)
+#     try:
+#         url = "https://api.openai.com/v1/audio/transcriptions"
+#         headers = {"Authorization": f"Bearer {openai.api_key}"}
+#         data = {
+#             "model": "whisper-1",
+#         }
+#         files = {"file": ("recording.wav", audio_file, "audio/wav")}
+
+#         async with httpx.AsyncClient() as client:
+#             response = await client.post(url, headers=headers, data=data, files=files)
+#         response_json = response.json()
+
+#     except Exception as e:
+#         raise HTTPException(status_code=400, detail=f"OpenAI Whisper error: {str(e)}")
+
+#     transcript_text = response_json.get("text", "")
+
+#     # Rest of your logic (filler words, fluency score, etc.)
+#     filler_list = ["um", "uh", "like", "so", "you know", "er"]
+#     transcript_lower = transcript_text.lower()
+#     found_fillers = [f for f in filler_list if f in transcript_lower]
+
+#     word_count = len(transcript_text.split())
+#     words_per_minute = (
+#         (word_count / duration_seconds) * 60 if duration_seconds > 0 else 0.0
+#     )
+
+#     filler_count = len(found_fillers)
+#     fluency_score = max(0.0, 100.0 - filler_count * 5.0) if word_count else 0.0
+#     confidence_score = min(100.0, word_count) if word_count else 0.0
+#     clarity_score = max(0.0, 100.0 - filler_count * 3.0) if word_count else 0.0
+
+#     if not interview_doc.question_responses:
+#         raise HTTPException(status_code=404, detail="No questions in this interview.")
+
+#     question_found = False
+#     for qr in interview_doc.question_responses:
+#         if qr.question_id == question_id:
+#             # Found the question to update
+#             qr.speech_analysis = SpeechAnalysis(
+#                 transcript=transcript_text,
+#                 fluency_score=fluency_score,
+#                 confidence_score=confidence_score,
+#                 clarity_score=clarity_score,
+#                 words_per_minute=words_per_minute,
+#                 filler_words=found_fillers,
+#                 time_seconds=duration_seconds,
+#             )
+#             question_found = True
+#             break
+
+#     if not question_found:
+#         raise HTTPException(
+#             status_code=404, detail="question_id not found in this interview"
+#         )
+#     interview_doc.completion_percentage = int(completion_percentage)
+#     await interview_doc.save()
+
+#     return JSONResponse(
+#         content={
+#             "message": f"Transcription and analysis complete for question {question_id}",
+#         }
+#     )
+
+
 @router.post("/transcribe")
 async def transcribe_audio(
     question_id: str = Query(...),
@@ -458,95 +653,186 @@ async def transcribe_audio(
     audio: UploadFile = File(...),
     current_user: str = Depends(auth.get_current_user),
 ):
-    db_user = await User.find_one(User.email == current_user)
-    if not db_user:
-        raise HTTPException(status_code=404, detail="User not found.")
-    try:
-        interview_obj_id = ObjectId(interview_id)
-    except:
-        raise HTTPException(status_code=400, detail="Invalid interview_id")
-
-    interview_doc = await Interview.get(interview_obj_id)
-    if not interview_doc:
-        raise HTTPException(status_code=404, detail="Interview not found.")
-
-    try:
-        audio_bytes = await audio.read()
-        audio_file = io.BytesIO(audio_bytes)
-        audio_data, sample_rate = librosa.load(io.BytesIO(audio_bytes), sr=None)
-        duration_seconds = librosa.get_duration(y=audio_data, sr=sample_rate)
-
-    except Exception as e:
-        logging.error("Could not decode audio with librosa. Error: %s", e)
-        raise HTTPException(
-            status_code=400,
-            detail=f"Could not decode audio. Ensure valid format. Error: {str(e)}",
-        )
-
-    audio_file.seek(0)
-    try:
-        url = "https://api.openai.com/v1/audio/transcriptions"
-        headers = {"Authorization": f"Bearer {openai.api_key}"}
-        data = {
-            "model": "whisper-1",
-        }
-        files = {"file": ("recording.wav", audio_file, "audio/wav")}
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(url, headers=headers, data=data, files=files)
-        response_json = response.json()
-
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"OpenAI Whisper error: {str(e)}")
-
-    transcript_text = response_json.get("text", "")
-
-    # Rest of your logic (filler words, fluency score, etc.)
-    filler_list = ["um", "uh", "like", "so", "you know", "er"]
-    transcript_lower = transcript_text.lower()
-    found_fillers = [f for f in filler_list if f in transcript_lower]
-
-    word_count = len(transcript_text.split())
-    words_per_minute = (
-        (word_count / duration_seconds) * 60 if duration_seconds > 0 else 0.0
+    # Add request logging
+    logging.info(
+        f"Transcribe request received - interview_id: {interview_id}, question_id: {question_id}"
     )
+    try:
+        # User validation
+        db_user = await User.find_one(User.email == current_user)
+        if not db_user:
+            logging.error(f"User not found: {current_user}")
+            raise HTTPException(status_code=404, detail="User not found.")
 
-    filler_count = len(found_fillers)
-    fluency_score = max(0.0, 100.0 - filler_count * 5.0) if word_count else 0.0
-    confidence_score = min(100.0, word_count) if word_count else 0.0
-    clarity_score = max(0.0, 100.0 - filler_count * 3.0) if word_count else 0.0
-
-    if not interview_doc.question_responses:
-        raise HTTPException(status_code=404, detail="No questions in this interview.")
-
-    question_found = False
-    for qr in interview_doc.question_responses:
-        if qr.question_id == question_id:
-            # Found the question to update
-            qr.speech_analysis = SpeechAnalysis(
-                transcript=transcript_text,
-                fluency_score=fluency_score,
-                confidence_score=confidence_score,
-                clarity_score=clarity_score,
-                words_per_minute=words_per_minute,
-                filler_words=found_fillers,
-                time_seconds=duration_seconds,
+        # Interview validation
+        try:
+            interview_obj_id = ObjectId(interview_id)
+            logging.info(f"Valid ObjectId created: {interview_obj_id}")
+        except Exception as e:
+            logging.error(
+                f"Invalid interview_id format: {interview_id}. Error: {str(e)}"
             )
-            question_found = True
-            break
+            raise HTTPException(
+                status_code=400, detail=f"Invalid interview_id: {str(e)}"
+            )
 
-    if not question_found:
-        raise HTTPException(
-            status_code=404, detail="question_id not found in this interview"
-        )
-    interview_doc.completion_percentage = int(completion_percentage)
-    await interview_doc.save()
+        interview_doc = await Interview.get(interview_obj_id)
+        if not interview_doc:
+            logging.error(f"Interview not found with ID: {interview_id}")
+            raise HTTPException(status_code=404, detail="Interview not found.")
 
-    return JSONResponse(
-        content={
-            "message": f"Transcription and analysis complete for question {question_id}",
-        }
-    )
+        # Audio processing
+        try:
+            audio_bytes = await audio.read()
+            logging.info(f"Audio file read, size: {len(audio_bytes)} bytes")
+
+            if len(audio_bytes) == 0:
+                logging.error("Empty audio file received")
+                raise HTTPException(status_code=400, detail="Empty audio file received")
+
+            audio_file = io.BytesIO(audio_bytes)
+
+            # Check audio format
+            try:
+                audio_data, sample_rate = librosa.load(io.BytesIO(audio_bytes), sr=None)
+                duration_seconds = librosa.get_duration(y=audio_data, sr=sample_rate)
+                logging.info(
+                    f"Audio decoded successfully. Duration: {duration_seconds}s, Sample rate: {sample_rate}Hz"
+                )
+            except Exception as e:
+                logging.error(f"Librosa audio decode error: {str(e)}")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Could not decode audio. Ensure valid format. Error: {str(e)}",
+                )
+
+            # OpenAI transcription
+            audio_file.seek(0)
+            try:
+                url = "https://api.openai.com/v1/audio/transcriptions"
+                headers = {"Authorization": f"Bearer {openai.api_key}"}
+                logging.info(
+                    f"OpenAI API key length: {len(openai.api_key) if openai.api_key else 'No API key'}"
+                )
+
+                data = {"model": "whisper-1"}
+                files = {"file": ("recording.wav", audio_file, "audio/wav")}
+
+                logging.info("Sending request to OpenAI Whisper API")
+                async with httpx.AsyncClient(timeout=30.0) as client:  # Add timeout
+                    response = await client.post(
+                        url, headers=headers, data=data, files=files
+                    )
+
+                # Check response status
+                if response.status_code != 200:
+                    logging.error(
+                        f"OpenAI API error. Status: {response.status_code}, Response: {response.text}"
+                    )
+                    raise HTTPException(
+                        status_code=response.status_code,
+                        detail=f"OpenAI API error: {response.text}",
+                    )
+
+                response_json = response.json()
+                logging.info("OpenAI transcription successful")
+            except httpx.TimeoutException:
+                logging.error("OpenAI API request timed out")
+                raise HTTPException(
+                    status_code=504, detail="OpenAI API request timed out"
+                )
+            except httpx.RequestError as e:
+                logging.error(f"OpenAI API request failed: {str(e)}")
+                raise HTTPException(
+                    status_code=502, detail=f"OpenAI API request failed: {str(e)}"
+                )
+            except Exception as e:
+                logging.error(f"OpenAI Whisper API error: {str(e)}")
+                raise HTTPException(
+                    status_code=400, detail=f"OpenAI Whisper error: {str(e)}"
+                )
+
+            transcript_text = response_json.get("text", "")
+            if not transcript_text:
+                logging.warning("Empty transcript returned from OpenAI")
+
+            # Analysis logic
+            logging.info("Processing speech analysis")
+            speech_metrics = analyze_speech(
+                transcript_text=transcript_text, duration_seconds=duration_seconds
+            )
+
+            # Update interview document
+            if not interview_doc.question_responses:
+                logging.error(f"No questions found in interview {interview_id}")
+                raise HTTPException(
+                    status_code=404, detail="No questions in this interview."
+                )
+
+            question_found = False
+            for qr in interview_doc.question_responses:
+                if qr.question_id == question_id:
+                    # Found the question to update
+                    qr.speech_analysis = SpeechAnalysis(
+                        transcript=transcript_text,
+                        fluency_score=speech_metrics["fluency_score"],
+                        confidence_score=speech_metrics["confidence_score"],
+                        clarity_score=speech_metrics["clarity_score"],
+                        words_per_minute=speech_metrics["words_per_minute"],
+                        filler_words=speech_metrics["found_fillers"],
+                        time_seconds=duration_seconds,
+                    )
+                    question_found = True
+                    logging.info(
+                        f"Updated question {question_id} with transcript and analysis"
+                    )
+                    break
+
+            if not question_found:
+                logging.error(
+                    f"Question ID {question_id} not found in interview {interview_id}"
+                )
+                raise HTTPException(
+                    status_code=404, detail="question_id not found in this interview"
+                )
+
+            try:
+                interview_doc.completion_percentage = int(completion_percentage)
+                await interview_doc.save()
+                logging.info(
+                    f"Interview {interview_id} saved with updated completion {completion_percentage}%"
+                )
+            except Exception as e:
+                logging.error(f"Error saving interview document: {str(e)}")
+                raise HTTPException(
+                    status_code=500, detail=f"Error saving interview: {str(e)}"
+                )
+
+            return JSONResponse(
+                content={
+                    "message": f"Transcription and analysis complete for question {question_id}",
+                }
+            )
+
+        except HTTPException:
+            raise
+
+        except Exception as e:
+            logging.error(f"Unhandled exception in transcribe endpoint: {str(e)}")
+            import traceback
+
+            logging.error(traceback.format_exc())
+            raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        logging.error(f"Unhandled exception in transcribe endpoint: {str(e)}")
+        import traceback
+
+        logging.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
 
 
 @router.post("/synthesize_speech")
