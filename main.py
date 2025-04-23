@@ -22,6 +22,7 @@ origins = [
     "https://mockai.tech",
     "https://www.mockai.tech",
     "https://dev.mockai.tech",
+    "https://dev-api.mockai.tech",
 ]
 
 app.add_middleware(

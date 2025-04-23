@@ -645,6 +645,19 @@ async def interview_feedback(
 #     )
 
 
+@router.options("/transcribe")
+async def options_transcribe():
+    response = JSONResponse(
+        content={"message": "CORS preflight handled"}, status_code=200
+    )
+    response.headers["Access-Control-Allow-Origin"] = "https://dev.mockai.tech"
+    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Max-Age"] = "86400"  # Cache preflight for 24 hours
+    return response
+
+
 @router.post("/transcribe")
 async def transcribe_audio(
     question_id: str = Query(...),
