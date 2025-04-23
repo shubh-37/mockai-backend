@@ -134,6 +134,7 @@ def analyze_speech(transcript_text, duration_seconds):
         "filler_word_counts": filler_word_counts,
         "total_filler_count": total_filler_count,
         "filler_frequency": round(filler_frequency, 1),
+        "filler_words_used": list(filler_word_counts.keys()),
     }
 
 
@@ -792,7 +793,7 @@ async def transcribe_audio(
                         confidence_score=speech_metrics["confidence_score"],
                         clarity_score=speech_metrics["clarity_score"],
                         words_per_minute=speech_metrics["words_per_minute"],
-                        filler_words=speech_metrics["found_fillers"],
+                        filler_words=speech_metrics["filler_words_used"],
                         time_seconds=duration_seconds,
                     )
                     question_found = True
