@@ -572,7 +572,8 @@ Output the JSON object in exactly this format:
      }},
      "time_management": {{
          "average_response_time": "<e.g., '35 seconds'>",
-         "question_completion_rate": <int: percentage of answered questions>
+         "question_completion_rate": <int: percentage of answered questions>,
+         "total_time_spent": "<e.g., '3 minutes 4 seconds'>"
      }}
   }},
   "strengths_and_weaknesses": [
