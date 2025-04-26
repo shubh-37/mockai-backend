@@ -433,6 +433,100 @@ def generate_initial_question(
 #     return LLMChain(llm=llm, prompt=prompt)
 
 
+# def create_feedback_analysis_agent():
+#     template = """
+# You are a highly experienced and consistent interview evaluator. Based on the candidate's interview responses provided below as JSON, generate a detailed and structured JSON report that strictly follows the FreeReview schema.
+
+# Key Instructions:
+# 1. Each answered question must be individually scored from 0 to 10 based on quality, clarity, and relevance. Unanswered questions = 0.
+# 2. The overall score = sum of individual question scores. Maximum possible score is {max_score}.
+# 3. The overall summary must reflect specific analysis and give the candidate 2-3 clear and constructive feedback points.
+# 4. Skill analysis must consider:
+#    - Ratio of answered questions
+#    - Language and structure of responses
+#    - Fluency, use of filler words, logical flow
+# 5. Estimate “active_listening” based on how well the candidate addresses the core of each question and references keywords or follow-ups.
+# 6. Avoid random zeros. Use qualitative reasoning for each score and skill metric.
+# 7. Include exactly 3 strengths and 3 weaknesses based on real patterns in the responses.
+# 8. Include completion rate as: (answered_questions / total_questions) * 100, rounded to integer.
+
+# Candidate Responses:
+# {responses}
+
+# Output the JSON object in exactly this format:
+# {{
+#   "overall_score": <realistic total score from 0 to {max_score}>,
+#   "overall_summary": "<2-3 sentence feedback directly to candidate>",
+
+#   "skill_analysis": {{
+#      "communication_skills": {{
+#          "clarity": <0-100, scale with completion rate>,
+#          "articulation": <0-100, based on how well structured their sentences and use of language are>,
+#          "active_listening": <0-100, based on attention to question intent and completeness of answers>
+#      }},
+#      "conceptual_understanding": {{
+#          "fundamental_concepts": <0-100, based on correctness of core ideas>,
+#          "theoretical_application": <0-100, scale with real-world application>,
+#          "analytical_reasoning": <0-100, based on how logically responses are framed>
+#      }},
+#      "speech_analysis": {{
+#          "avg_filler_words_used": <integer, estimated count across responses>,
+#          "avg_confidence_level": "<High|Medium|Low>",
+#          "avg_fluency_rate": <0-100, based on flow of language and sentence construction>
+#      }},
+#      "time_management": {{
+#          "average_response_time": "<e.g., '35 seconds'>",
+#          "question_completion_rate": <int: percentage of answered questions>
+#          "total_time_spent": "<e.g., '3 minutes 4 seconds'>"
+#      }}
+#   }},
+#   "strengths_and_weaknesses": [
+#      {{
+#         "type": "strength",
+#         "title": "<strength title>",
+#         "description": "<detailed explanation>"
+#      }},
+#      {{
+#         "type": "strength",
+#         "title": "<another strength title>",
+#         "description": "<detailed explanation>"
+#      }},
+#      {{
+#         "type": "strength",
+#         "title": "<another strength title>",
+#         "description": "<detailed explanation>"
+#      }},
+#      {{
+#         "type": "weakness",
+#         "title": "<weakness title>",
+#         "description": "<detailed explanation>"
+#      }},
+#      {{
+#         "type": "weakness",
+#         "title": "<another weakness title>",
+#         "description": "<detailed explanation>"
+#      }},
+#      {{
+#         "type": "weakness",
+#         "title": "<another weakness title>",
+#         "description": "<detailed explanation>"
+#      }}
+#   ]
+# }}
+# """
+
+#     prompt = PromptTemplate(
+#         template=template,
+#         input_variables=[
+#             "responses",
+#             "total_questions",
+#             "answered_questions",
+#             "max_score",
+#         ],
+#     )
+#     return LLMChain(llm=llm, prompt=prompt)
+
+
 def create_feedback_analysis_agent():
     template = """
 You are a highly experienced and consistent interview evaluator. Based on the candidate's interview responses provided below as JSON, generate a detailed and structured JSON report that strictly follows the FreeReview schema.
@@ -441,14 +535,16 @@ Key Instructions:
 1. Each answered question must be individually scored from 0 to 10 based on quality, clarity, and relevance. Unanswered questions = 0.
 2. The overall score = sum of individual question scores. Maximum possible score is {max_score}.
 3. The overall summary must reflect specific analysis and give the candidate 2-3 clear and constructive feedback points.
-4. Skill analysis must consider:
-   - Ratio of answered questions
-   - Language and structure of responses
-   - Fluency, use of filler words, logical flow
-5. Estimate “active_listening” based on how well the candidate addresses the core of each question and references keywords or follow-ups.
-6. Avoid random zeros. Use qualitative reasoning for each score and skill metric.
-7. Include exactly 3 strengths and 3 weaknesses based on real patterns in the responses.
-8. Include completion rate as: (answered_questions / total_questions) * 100, rounded to integer.
+4. Skill analysis must be *relative and proportional* to the completeness, consistency, and quality of *all responses together*, not just one.
+5. Use the following criteria for skill metrics:
+   - *Clarity* and *articulation* scale with how clearly and consistently all answers are written and explained.
+   - *Active listening* should be tied to how well the candidate addresses the core of each question across the board, not just one.
+   - *Conceptual skills* should reflect understanding demonstrated in multiple answers. If only one answer is strong, scale scores accordingly.
+   - *Speech scores* must be averaged estimates across all responses, and penalize vague, short, or incomplete answers.
+6. Cap the maximum skill sub-score (out of 100) to be no higher than the average percentage of answered questions and quality across responses.
+7. Avoid random zeros or overinflated 90+ values unless responses consistently justify them.
+8. Include exactly 3 strengths and 3 weaknesses based on real patterns in the responses.
+9. Include completion rate as: (answered_questions / total_questions) * 100, rounded to nearest integer.
 
 Candidate Responses:
 {responses}
@@ -460,24 +556,23 @@ Output the JSON object in exactly this format:
   
   "skill_analysis": {{
      "communication_skills": {{
-         "clarity": <0-100, scale with completion rate>,
-         "articulation": <0-100, based on how well structured their sentences and use of language are>,
-         "active_listening": <0-100, based on attention to question intent and completeness of answers>
+         "clarity": <0-100>,
+         "articulation": <0-100>,
+         "active_listening": <0-100>
      }},
      "conceptual_understanding": {{
-         "fundamental_concepts": <0-100, based on correctness of core ideas>,
-         "theoretical_application": <0-100, scale with real-world application>,
-         "analytical_reasoning": <0-100, based on how logically responses are framed>
+         "fundamental_concepts": <0-100>,
+         "theoretical_application": <0-100>,
+         "analytical_reasoning": <0-100>
      }},
      "speech_analysis": {{
-         "avg_filler_words_used": <integer, estimated count across responses>,
+         "avg_filler_words_used": <integer>,
          "avg_confidence_level": "<High|Medium|Low>", 
-         "avg_fluency_rate": <0-100, based on flow of language and sentence construction>
+         "avg_fluency_rate": <0-100>
      }},
      "time_management": {{
          "average_response_time": "<e.g., '35 seconds'>",
          "question_completion_rate": <int: percentage of answered questions>
-         "total_time_spent": "<e.g., '3 minutes 4 seconds'>"
      }}
   }},
   "strengths_and_weaknesses": [
