@@ -58,6 +58,111 @@ async def get_all_questions(topics: Optional[List[str]] = None):
     return questions_without_answers
 
 
+# def get_balanced_quiz(
+#     questions: List,
+#     total_questions: int,
+#     topics: Optional[List[str]] = None,
+# ):
+#     processed_topics = []
+#     if topics and len(topics) > 0:
+#         for topic in topics:
+#             if "," in topic:
+#                 # Split by comma and add each part as a separate topic
+#                 processed_topics.extend([t.strip() for t in topic.split(",")])
+#             else:
+#                 processed_topics.append(topic)
+
+#     if not processed_topics or len(processed_topics) == 0:
+#         available_topics = [
+#             "Verbal & Reading Comprehension",
+#             "Logical Reasoning",
+#             "Numerical Reasoning",
+#         ]
+#     else:
+#         available_topics = processed_topics
+
+#     # Group questions by level and topic
+#     grouped_questions: Dict[str, Dict[str, List]] = {
+#         "Easy": {topic: [] for topic in available_topics},
+#         "Medium": {topic: [] for topic in available_topics},
+#         "Hard": {topic: [] for topic in available_topics},
+#     }
+
+#     # Populate grouped_questions with questions that match the selected topics
+#     for question in questions:
+#         if question["topic"] in available_topics:
+#             grouped_questions[question["level"]][question["topic"]].append(question)
+
+#     # Calculate the number of questions to select from each category
+#     num_topics = len(available_topics)
+#     num_levels = 3  # Easy, Medium, Hard
+
+#     # Calculate questions per level, ensuring we get all questions
+#     questions_per_level = total_questions // num_levels
+#     remainder_levels = (
+#         total_questions % num_levels
+#     )  # Remainder to distribute across levels
+
+#     balanced_quiz = []
+
+#     # Process each level
+#     for i, level in enumerate(["Easy", "Medium", "Hard"]):
+#         # Add an extra question to this level if we have remainder
+#         current_level_questions = questions_per_level
+#         if i < remainder_levels:
+#             current_level_questions += 1
+
+#         # Calculate how many questions per topic for this level
+#         if num_topics == 1:
+#             questions_per_topic = current_level_questions  # All to one topic
+#         else:
+#             # Distribute questions per topic more carefully
+#             base_per_topic = current_level_questions // num_topics
+#             remainder_topics = current_level_questions % num_topics
+
+#             # Create a list of how many questions to take from each topic
+#             questions_per_topic_list = []
+#             for j in range(num_topics):
+#                 if j < remainder_topics:
+#                     questions_per_topic_list.append(base_per_topic + 1)
+#                 else:
+#                     questions_per_topic_list.append(base_per_topic)
+
+#         # Add questions for each topic
+#         for t_idx, topic in enumerate(available_topics):
+#             # Get questions for the current level and topic
+#             available_questions = grouped_questions[level][topic]
+
+#             # Get the number of questions needed for this topic
+#             if num_topics == 1:
+#                 needed_questions = questions_per_topic  # Using the integer directly
+#             else:
+#                 needed_questions = questions_per_topic_list[
+#                     t_idx
+#                 ]  # Using the list we created
+
+#             if len(available_questions) < needed_questions:
+#                 raise HTTPException(
+#                     status_code=400,
+#                     detail=f"Not enough questions for level '{level}' and topic '{topic}'. Need {needed_questions}, but have {len(available_questions)}.",
+#                 )
+
+#             # Randomly sample the required number of questions
+#             sampled_questions = random.sample(available_questions, needed_questions)
+#             balanced_quiz.extend(sampled_questions)
+
+#     # Shuffle the final quiz to ensure randomness
+#     random.shuffle(balanced_quiz)
+
+#     # Double-check we have the exact number needed
+#     if len(balanced_quiz) != total_questions:
+#         raise ValueError(
+#             f"Expected {total_questions} questions but got {len(balanced_quiz)}. This should not happen."
+#         )
+
+#     return balanced_quiz
+
+
 def get_balanced_quiz(
     questions: List,
     total_questions: int,
@@ -93,53 +198,50 @@ def get_balanced_quiz(
         if question["topic"] in available_topics:
             grouped_questions[question["level"]][question["topic"]].append(question)
 
-    # Calculate the number of questions to select from each category
-    num_topics = len(available_topics)
-    num_levels = 3  # Easy, Medium, Hard
-
-    # Calculate questions per level, ensuring we get all questions
-    questions_per_level = total_questions // num_levels
-    remainder_levels = (
-        total_questions % num_levels
-    )  # Remainder to distribute across levels
-
     balanced_quiz = []
+    num_topics = len(available_topics)
 
-    # Process each level
-    for i, level in enumerate(["Easy", "Medium", "Hard"]):
-        # Add an extra question to this level if we have remainder
-        current_level_questions = questions_per_level
-        if i < remainder_levels:
-            current_level_questions += 1
+    # First, determine questions per topic according to the required distribution
+    if num_topics == 1:
+        # All questions go to the single topic
+        questions_per_topic = [total_questions]
+    elif num_topics == 2:
+        # For 2 topics: Split questions with first topic getting the remainder
+        base = total_questions // 2
+        # For 15 questions: 8 and 7
+        # For 30 questions: 15 and 15
+        questions_per_topic = [base + (total_questions % 2), base]
+    elif num_topics == 3:
+        # For 3 topics: Equal distribution with any remainder going to first topics
+        base = total_questions // 3
+        remainder = total_questions % 3
+        questions_per_topic = [
+            base + (1 if i < remainder else 0) for i in range(num_topics)
+        ]
+    else:
+        # Generic case for more topics if ever needed
+        base = total_questions // num_topics
+        remainder = total_questions % num_topics
+        questions_per_topic = [
+            base + (1 if i < remainder else 0) for i in range(num_topics)
+        ]
 
-        # Calculate how many questions per topic for this level
-        if num_topics == 1:
-            questions_per_topic = current_level_questions  # All to one topic
-        else:
-            # Distribute questions per topic more carefully
-            base_per_topic = current_level_questions // num_topics
-            remainder_topics = current_level_questions % num_topics
+    # Now, for each topic, divide the questions evenly across difficulty levels
+    for topic_idx, topic in enumerate(available_topics):
+        topic_question_count = questions_per_topic[topic_idx]
 
-            # Create a list of how many questions to take from each topic
-            questions_per_topic_list = []
-            for j in range(num_topics):
-                if j < remainder_topics:
-                    questions_per_topic_list.append(base_per_topic + 1)
-                else:
-                    questions_per_topic_list.append(base_per_topic)
+        # Determine questions per level for this topic
+        base_per_level = topic_question_count // 3  # 3 levels: Easy, Medium, Hard
+        remainder_levels = topic_question_count % 3
 
-        # Add questions for each topic
-        for t_idx, topic in enumerate(available_topics):
-            # Get questions for the current level and topic
+        questions_per_level = [
+            base_per_level + (1 if i < remainder_levels else 0) for i in range(3)
+        ]
+
+        # Get questions for each level
+        for level_idx, level in enumerate(["Easy", "Medium", "Hard"]):
+            needed_questions = questions_per_level[level_idx]
             available_questions = grouped_questions[level][topic]
-
-            # Get the number of questions needed for this topic
-            if num_topics == 1:
-                needed_questions = questions_per_topic  # Using the integer directly
-            else:
-                needed_questions = questions_per_topic_list[
-                    t_idx
-                ]  # Using the list we created
 
             if len(available_questions) < needed_questions:
                 raise HTTPException(
