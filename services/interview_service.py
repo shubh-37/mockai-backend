@@ -301,6 +301,7 @@ async def interview_convo(
                 "message": "Interview already submitted.",
                 "review": interview_doc.free_review,
                 "user_data": interview_doc.user_data,
+                "completion_percentage": interview_doc.completion_percentage,
             }
         )
     responses_list = []
@@ -369,6 +370,7 @@ async def interview_convo(
             "message": "Interview submitted successfully.",
             "review": free_feedback,
             "user_data": user_data,
+            "completion_percentage": interview_doc.completion_percentage,
         }
     )
 
@@ -453,6 +455,7 @@ async def interview_feedback(
                 "paid_review": paid_feedback,
                 "review": interview_doc.free_review.dict(),
                 "user_data": user_data,
+                "completion_percentage": interview_doc.completion_percentage,
             }
         )
 
@@ -588,6 +591,7 @@ async def interview_feedback(
             "paid_review": paid_feedback,
             "review": interview_doc.free_review.dict(),
             "user_data": user_data,
+            "completion_percentage": interview_doc.completion_percentage,
         }
     )
 
