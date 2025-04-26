@@ -203,8 +203,6 @@ async def generate_questions(
     interview_doc = await Interview.get(interview_obj_id)
     if not interview_doc:
         raise HTTPException(status_code=404, detail="Interview not found.")
-    logging.info(str(interview_doc.user_id.ref.id))
-    logging.info(str(db_user.id))
     if str(interview_doc.user_id.ref.id) != str(db_user.id):
         raise HTTPException(
             status_code=403, detail="Not authorized to access this interview."
@@ -538,6 +536,53 @@ async def interview_feedback(
     interview_doc.paid_review = PaidReview(**paid_feedback)
     await interview_doc.save()
 
+    if not interview_doc.free_review:
+        logging.info("Unable to find free review, generating free review!!!!!")
+        responses_list = []
+        for qa in interview_doc.question_responses:
+            combined = {"question_id": qa.question_id, "question": qa.question}
+
+            if qa.speech_analysis is not None:
+                analysis_dict = qa.speech_analysis.model_dump()
+                combined = {**combined, **analysis_dict}
+
+            responses_list.append(combined)
+
+        answered_questions = sum(
+            1
+            for qa in interview_doc.question_responses
+            if qa.speech_analysis is not None
+        )
+        for qa in interview_doc.question_responses:
+            combined = {"question_id": qa.question_id, "question": qa.question}
+            if qa.speech_analysis is not None:
+                analysis_dict = qa.speech_analysis.model_dump()
+                combined = {**combined, **analysis_dict}
+            responses_list.append(combined)
+
+        responses_json = json.dumps(responses_list)
+        free_feedback_raw = openai_utils.generate_feedback(
+            responses_json,
+            len(interview_doc.question_responses),
+            answered_questions,
+            answered_questions * 10,
+        )
+        if isinstance(free_feedback_raw, str):
+            free_feedback = json.loads(free_feedback_raw)
+        elif isinstance(free_feedback_raw, dict):
+            if "text" in free_feedback_raw:
+                try:
+                    free_feedback = json.loads(free_feedback_raw["text"])
+                except:
+                    free_feedback = free_feedback_raw["text"]
+            else:
+                free_feedback = free_feedback_raw
+        else:
+            raise ValueError(f"Unexpected response type: {type(free_feedback_raw)}")
+
+        interview_doc.free_review = FreeReview(**free_feedback)
+        await interview_doc.save()
+
     return JSONResponse(
         content={
             "paid_review": paid_feedback,
@@ -545,6 +590,7 @@ async def interview_feedback(
             "user_data": user_data,
         }
     )
+
 
 @router.post("/transcribe")
 async def transcribe_audio(
