@@ -20,10 +20,10 @@ class UserProfile(BaseModel):
     field: Optional[str] = None
 
     @field_validator("years_of_experience")
-    def validate_yrs_of_exp(cls, value: int) -> int:
-        if not value >= 0:
+    def validate_yrs_of_exp(cls, value: Optional[int]) -> Optional[int]:
+        if value is not None and value < 0:
             raise ValueError(
-                "Invalid Experience (years). It must be greater than zero."
+                "Invalid Experience (years). It cannot be negative."
             )
         return value
 
