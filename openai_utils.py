@@ -3,12 +3,9 @@ import logging
 from fastapi import FastAPI
 from dotenv import load_dotenv
 from pydantic import BaseModel
-from langchain_community.llms import OpenAI
 from langchain_community.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
-from langchain.memory import ConversationBufferMemory
 from langchain.chains import LLMChain
-import json
 
 load_dotenv()
 
@@ -19,20 +16,14 @@ app = FastAPI()
 logging.basicConfig(level=logging.INFO)
 
 # Initialize Free OpenAI model (for general use)
-llm = ChatOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-# Initialize Paid OpenAI model (ensure you have access to GPT-4 or similar)
-paid_llm = OpenAI(
-    temperature=0.7,
+llm = ChatOpenAI(
+    api_key=os.getenv("OPENAI_API_KEY"),
     model_name="gpt-4",
-    openai_api_key=os.getenv("OPENAI_API_KEY"),
+    temperature=0.7,
+    max_tokens=1024,
 )
 
-# Initialize Memory
-memory = ConversationBufferMemory()
 
-
-# Pydantic Models
 class InterviewInput(BaseModel):
     job_role: str
     company: str
@@ -46,79 +37,42 @@ class FeedbackInput(BaseModel):
     qaa: str
 
 
-# Generate initial questions agent
 # def create_dynamic_question_agent():
 #     template = """
-#         Greet the candidate warmly in real time. Start by asking an introductory question that prompts the candidate to introduce themselves.
-#         Then, generate 9 additional unique and dynamic interview questions for a candidate applying for {job_role} at {company} in {field} and based on experience {years_of_experience} years.
-#         The questions should explore the candidate's skills, experience, cultural fit and also candidate's resume {resume}.
+#         Greet the candidate warmly in real time. Start by asking a friendly, conversational introductory question that prompts the candidate to introduce themselves.
 
-#         Return a JSON object in the following format (with no placeholder text):
-#         {{
-#         "greeting": "Your warm greeting message",
-#         "questions": [
-#             "Introductory question: Ask the candidate to introduce themselves.",
-#             "Question 2",
-#             "Question 3",
-#             "Question 4",
-#             "Question 5",
-#             "Question 6",
-#             "Question 7",
-#             "Question 8",
-#             "Question 9",
-#             "Question 10"
-#         ]
-#         }}
-#         """
-#     prompt = PromptTemplate(
-#         template=template,
-#         input_variables=[
-#             "job_role",
-#             "company",
-#             "resume",
-#             "years_of_experience",
-#             "field",
-#         ],
-#     )
-#     return LLMChain(llm=llm, prompt=prompt)
+#         Then, generate 9 additional unique and well-structured interview questions for a candidate applying for the role of {job_role} at {company} in the field of {field}, with {years_of_experience} years of experience.
 
-
-# def create_dynamic_question_agent():
-#     template = """
-#         Greet the candidate warmly in real time. Start by asking an introductory question that prompts the candidate to introduce themselves.
-
-#         Then, generate 9 additional *unique and well-structured* interview questions for a candidate applying for the role of {job_role} at {company} in the field of {field}, with {years_of_experience} years of experience.
-
-#         The questions should be *balanced* as follows:
-#         - At least *three* deeply *technical* questions that test core expertise based on the candidate's resume ({resume}).
-#         - The remaining *six* should assess *problem-solving, frameworks/tools proficiency, real-world application, best practices, debugging, and cultural fit*.
+#         The questions should be balanced as follows:
+#         - At least three deeply technical questions that test core expertise based on the candidate's resume ({resume}).
+#         - The remaining six should assess problem-solving, frameworks/tools proficiency, real-world application, best practices, debugging, and cultural fit.
 
 #         Structure:
-#         1. *(Introductory Question)* Ask the candidate to introduce themselves.
-#         2. *(Technical Question 1)* In-depth technical question testing core expertise.
-#         3. *(Technical Question 2)* Another technical question, focusing on a different key skill.
-#         4. *(Technical Question 3)* Advanced or specialized technical scenario.
-#         5. *(Problem-Solving Scenario)* Real-world problem the candidate might face in this role.
-#         6. *(Best Practices & Optimization)* Question assessing industry best practices.
-#         7. *(Frameworks & Tools)* Evaluates proficiency with key technologies mentioned in the resume.
-#         8. *(Debugging & Edge Cases)* A scenario requiring troubleshooting and debugging skill in particular job field based on resume.
-#         9. *(New Trends & Innovation)* Checks awareness of emerging trends in the field.
-#         10. *(Cultural Fit & Teamwork)* Evaluates how well the candidate aligns with company values and teamwork skills.
+#         1. Ask the candidate to introduce themselves in a natural, friendly way.
+#         2. Ask a specific, deeply technical question based on the resume to assess core expertise.
+#         3. Ask a technical question focused on a different relevant skill or area of expertise.
+#         4. Pose an advanced or specialized technical scenario to assess depth of knowledge.
+#         5. Present a realistic problem-solving scenario they might face in this role.
+#         6. Ask a question that assesses understanding of industry best practices or optimization strategies.
+#         7. Evaluate proficiency with key frameworks/tools mentioned in the resume.
+#         8. Present a debugging or edge-case troubleshooting scenario relevant to the job field.
+#         9. Ask a question that explores knowledge of current trends or innovations in the field.
+#         10. Ask a question that evaluates cultural fit, communication, or teamwork skills in the workplace.
 
 #         Return a JSON object in the following format (with no placeholder text):
 #         {{
 #         "greeting": "Your warm greeting message",
 #         "questions": [
-#             "Introductory question: Ask the candidate to introduce themselves.",
-#             "Question 2: (Technical question testing deep expertise)",
-#             "Question 3: (Technical question on a different skill)",
-#             "Question 4: (Advanced or specialized technical scenario)",
-#             "Question 5: (Problem-solving scenario relevant to the job role)",
-#             "Question 6: (Best practices & optimization techniques)",
-#             "Question 7: (Frameworks/tools proficiency)",
-#             "Question 8: (Debugging & edge case handling)",
-#             "Question 9: (New trends in the field & future-proofing knowledge)",
-#             "Question 10: (Cultural fit, teamwork, or leadership skills)"
+#             "Conversational introductory question...",
+#             "Fully-formed technical question 1...",
+#             "Fully-formed technical question 2...",
+#             "Advanced technical scenario question...",
+#             "Real-world problem-solving scenario...",
+#             "Best practices and optimization question...",
+#             "Frameworks/tools proficiency question...",
+#             "Debugging or edge case handling scenario...",
+#             "Trends/innovation awareness question...",
+#             "Cultural fit or teamwork question..."
 #         ]
 #         }}
 #         """
@@ -137,49 +91,52 @@ class FeedbackInput(BaseModel):
 
 def create_dynamic_question_agent():
     template = """
-        Greet the candidate warmly in real time. Start by asking a friendly, conversational introductory question that prompts the candidate to introduce themselves.
+        You are a smart and friendly interview assistant.
 
-        Then, generate 9 additional unique and well-structured interview questions for a candidate applying for the role of {job_role} at {company} in the field of {field}, with {years_of_experience} years of experience.
+        Step 1: Greet the candidate warmly. Start with a friendly, conversational introductory question that invites them to introduce themselves.
 
-        The questions should be balanced as follows:
-        - At least three deeply technical questions that test core expertise based on the candidate's resume ({resume}).
-        - The remaining six should assess problem-solving, frameworks/tools proficiency, real-world application, best practices, debugging, and cultural fit.
+        Step 2: Generate 9 thoughtful and well-balanced interview questions tailored to a candidate applying for the role of {job_role} at {company}, in the field of {field}, with {years_of_experience} years of experience.
 
-        Structure:
-        1. Ask the candidate to introduce themselves in a natural, friendly way.
-        2. Ask a specific, deeply technical question based on the resume to assess core expertise.
-        3. Ask a technical question focused on a different relevant skill or area of expertise.
-        4. Pose an advanced or specialized technical scenario to assess depth of knowledge.
-        5. Present a realistic problem-solving scenario they might face in this role.
-        6. Ask a question that assesses understanding of industry best practices or optimization strategies.
-        7. Evaluate proficiency with key frameworks/tools mentioned in the resume.
-        8. Present a debugging or edge-case troubleshooting scenario relevant to the job field.
-        9. Ask a question that explores knowledge of current trends or innovations in the field.
-        10. Ask a question that evaluates cultural fit, communication, or teamwork skills in the workplace.
+        Step 3: Use the following resume summary to guide your questions. Focus on:
+        - Core skills and competencies
+        - Tools, systems, or methodologies mentioned
+        - Past industries, job functions, or responsibilities
+        - Any notable achievements or standout traits
 
-        Return a JSON object in the following format (with no placeholder text):
+        Resume Summary:
+        {resume_summary}
+
+        Step 4: If the company "{company}" is well-known (e.g., Meta, McKinsey, Deloitte, Amazon), include 1–2 questions inspired by its typical interview style. If not, ask questions relevant to the broader industry or functional context.
+
+        Required Question Structure:
+        1. Friendly introductory question to ask the candidate to introduce themselves
+        2. Deep role-relevant question based on resume summary (domain expertise)
+        3. Question on a different but relevant skill/area
+        4. Advanced or strategic scenario to assess depth of understanding
+        5. Real-world problem-solving or task-based question
+        6. Question about best practices or optimization in the candidate's field
+        7. Tools, platforms, or methodology familiarity question (based on resume summary)
+        8. Troubleshooting or decision-making scenario
+        9. Awareness of current trends or innovations in the industry
+        10. Cultural fit, collaboration, or communication question
+
+        Output only a valid JSON object exactly in the following format. Do not include any explanation or text outside the JSON:
         {{
-        "greeting": "Your warm greeting message",
-        "questions": [
-            "Conversational introductory question...",
-            "Fully-formed technical question 1...",
-            "Fully-formed technical question 2...",
-            "Advanced technical scenario question...",
-            "Real-world problem-solving scenario...",
-            "Best practices and optimization question...",
-            "Frameworks/tools proficiency question...",
-            "Debugging or edge case handling scenario...",
-            "Trends/innovation awareness question...",
-            "Cultural fit or teamwork question..."
-        ]
+            "greeting": "<warm greeting message>",
+            "questions": [
+                "<Question 1>",
+                "<Question 2>",
+                "... up to Question 10"
+            ]
         }}
-        """
+    """
+
     prompt = PromptTemplate(
         template=template,
         input_variables=[
             "job_role",
             "company",
-            "resume",
+            "resume_summary",
             "years_of_experience",
             "field",
         ],
@@ -190,7 +147,7 @@ def create_dynamic_question_agent():
 def generate_initial_question(
     job_role: str,
     company: str,
-    resume: str = None,
+    resume_summary: str = None,
     years_of_experience: int = None,
     field: str = None,
 ):
@@ -199,238 +156,11 @@ def generate_initial_question(
         {
             "job_role": job_role,
             "company": company,
-            "resume": resume,
+            "resume_summary": resume_summary,
             "years_of_experience": years_of_experience,
             "field": field,
         }
     )
-
-
-# def create_feedback_analysis_agent():
-#     template = """
-# You are a highly experienced interview evaluator. Based on the candidate's interview responses provided below as JSON, produce a detailed and realistic JSON report that strictly adheres to the FreeReview schema. Even if the responses are brief, infer and provide non-default realistic values based on subtle cues and general expectations for a good candidate. Do not include any text or explanation outside of valid JSON.
-
-# Candidate Responses:
-# {responses}
-
-# Output the JSON object exactly in the following format:
-# {{
-#   "overall_score": <number between 0 and 100>,
-# #   "overall_summary": "<detailed summary of overall performance>",
-
-#   "overall_summary": "<a concise 2-3 sentence summary of your overall performance, addressing you directly. For example, 'You demonstrated a strong grasp of Python fundamentals and proficiency with frameworks such as Django. Your communication was clear, though enhancing your active listening could further improve your performance. Your time management was commendable, yet refining your conceptual understanding may lead to even better outcomes.' and different for different role based on candidates interview analysis>",
-#   "skill_analysis": {{
-#      "communication_skills": {{
-#          "clarity": <number between 0 and 100>,
-#          "articulation": <number between 0 and 100>,
-#          "active_listening": <number between 0 and 100>
-#      }},
-#      "conceptual_understanding": {{
-#          "fundamental_concepts": <number between 0 and 100>,
-#          "theoretical_application": <number between 0 and 100>,
-#          "analytical_reasoning": <number between 0 and 100>
-#      }},
-#      "speech_analysis": {{
-#          "avg_filler_words_used": <integer>,
-#          "avg_confidence_level": "<High|Medium|Low>",
-#          "avg_fluency_rate": <number between 0 and 100>
-#      }},
-#      "time_management": {{
-#          "average_response_time": "<string, e.g., '45 seconds'>",
-#          "question_completion_rate": <number between 0 and 100>
-#      }}
-#   }},
-#   "strengths_and_weaknesses": [
-#      {{
-#         "type": "strength",
-#         "title": "<title for strength>",
-#         "description": "<description of the strength>"
-#      }},
-#      {{
-#         "type": "weakness",
-#         "title": "<title for weakness>",
-#         "description": "<description of the weakness>"
-#      }},
-#      {{
-#         "type": "weakness",
-#         "title": "<title for additional weakness>",
-#         "description": "<description of the additional weakness>"
-#      }}
-#   ]
-# }}
-
-# If the candidate's responses are insufficient, infer and provide approximate realistic values based on the overall context rather than defaulting to 0 or "N/A".
-#     """
-#     prompt = PromptTemplate(template=template, input_variables=["responses"])
-#     return LLMChain(llm=llm, prompt=prompt)
-
-
-# def create_feedback_analysis_agent():
-#     template = """
-# You are a highly experienced interview evaluator. Based on the candidate's interview responses provided below as JSON, generate a detailed and realistic JSON report that strictly follows the FreeReview schema.
-# *Key Conditions:*
-# - *If the candidate provided fewer than 4 responses, do not generate feedback. Instead, return a message directing them back to the landing page.*
-# - *Overall score and summary must be categorized based on the number of responses:*
-#   - *Low* (≤ 40%) → 4 responses.
-#   - *Medium* (50-70%) → 5-7 responses.
-#   - *High* (80-100%) → 8-10 responses.
-
-# If fewer than 4 responses are provided, return this exact JSON response:
-
-# Ensure that:
-# 1. The overall score is calculated realistically, factoring in both answered and unanswered questions.
-# 2. The question completion rate is accurately derived from the number of responses provided.
-# 3. The overall summary is tailored based on the responses, avoiding generic statements like "You're good at XYZ technology" unless explicitly supported.
-# 4. Always generate exactly three strengths and three weaknesses, even if inferred from minimal responses.
-# 5. *If a response is missing for any question, infer a likely transcript and relevant parameters based on the question type, but do not overinflate performance scores. Ensure every question has a transcript, fluency score, confidence score, filler words, response time, and clarity score.*
-
-# Candidate Responses:
-# {responses}
-
-# Output the JSON object exactly in the following format:
-# {{
-#   "overall_score": <realistic number between 0 and 100, reflecting completeness and performance>,
-#   "overall_summary": "<A concise 2-3 sentence summary addressing the candidate directly, highlighting key strengths and areas for improvement based on responses>",
-
-#   "skill_analysis": {{
-#      "communication_skills": {{
-#          "clarity": <number between 0 and 100>,
-#          "articulation": <number between 0 and 100>,
-#          "active_listening": <number between 0 and 100>
-#      }},
-#      "conceptual_understanding": {{
-#          "fundamental_concepts": <number between 0 and 100>,
-#          "theoretical_application": <number between 0 and 100>,
-#          "analytical_reasoning": <number between 0 and 100>
-#      }},
-#      "speech_analysis": {{
-#          "avg_filler_words_used": <integer>,
-#          "avg_confidence_level": "<High|Medium|Low>",
-#          "avg_fluency_rate": <number between 0 and 100>
-#      }},
-#      "time_management": {{
-#          "average_response_time": "<string, e.g., '45 seconds'>",
-#          "question_completion_rate": <realistic number between 0 and 100, based on answered questions>
-#      }}
-#   }},
-#   "strengths_and_weaknesses": [
-#      {{
-#         "type": "strength",
-#         "title": "<title for strength>",
-#         "description": "<description of the strength>"
-#      }},
-#      {{
-#         "type": "strength",
-#         "title": "<title for additional strength>",
-#         "description": "<description of the additional strength>"
-#      }},
-#      {{
-#         "type": "strength",
-#         "title": "<title for another strength>",
-#         "description": "<description of the strength>"
-#      }},
-#      {{
-#         "type": "weakness",
-#         "title": "<title for weakness>",
-#         "description": "<description of the weakness>"
-#      }},
-#      {{
-#         "type": "weakness",
-#         "title": "<title for additional weakness>",
-#         "description": "<description of the additional weakness>"
-#      }},
-#      {{
-#         "type": "weakness",
-#         "title": "<title for another weakness>",
-#         "description": "<description of the weakness>"
-#      }}
-#   ]
-# }}
-
-# If most responses are missing, infer realistic approximate values based on context, ensuring every question has a complete set of transcript data and evaluation metrics, but do not overinflate scores.
-#     """
-#     prompt = PromptTemplate(template=template, input_variables=["responses"])
-#     return LLMChain(llm=llm, prompt=prompt)
-
-
-# def create_feedback_analysis_agent():
-#     template = """
-# You are a highly experienced interview evaluator. Based on the candidate's interview responses provided below as JSON, generate a detailed and realistic JSON report that strictly follows the FreeReview schema.
-
-# Ensure that:
-# 1. The overall score is calculated realistically, factoring in both answered and unanswered questions.
-# 2. The question completion rate is accurately derived from the number of responses provided.
-# 3. The overall summary is tailored based on the responses, avoiding generic statements like "You're good at XYZ technology" unless explicitly supported.
-# 4. Always generate exactly three strengths and three weaknesses, even if inferred from minimal responses.
-# 5. *If a response is missing for any question, infer a likely transcript and relevant parameters based on the question type, but do not overinflate performance scores. Ensure every question has a transcript, fluency score, confidence score, filler words, response time, and clarity score.*
-
-# Candidate Responses:
-# {responses}
-
-# Output the JSON object exactly in the following format:
-# {{
-#   "overall_score": <realistic number between 0 and 100, reflecting completeness and performance>,
-#   "overall_summary": "<A concise 2-3 sentence summary addressing the candidate directly, highlighting key strengths and areas for improvement based on responses>",
-
-#   "skill_analysis": {{
-#      "communication_skills": {{
-#          "clarity": <number between 0 and 100>,
-#          "articulation": <number between 0 and 100>,
-#          "active_listening": <number between 0 and 100>
-#      }},
-#      "conceptual_understanding": {{
-#          "fundamental_concepts": <number between 0 and 100>,
-#          "theoretical_application": <number between 0 and 100>,
-#          "analytical_reasoning": <number between 0 and 100>
-#      }},
-#      "speech_analysis": {{
-#          "avg_filler_words_used": <integer>,
-#          "avg_confidence_level": "<High|Medium|Low>",
-#          "avg_fluency_rate": <number between 0 and 100>
-#      }},
-#      "time_management": {{
-#          "average_response_time": "<string, e.g., '45 seconds'>",
-#          "question_completion_rate": <realistic number between 0 and 100, based on answered questions>
-#      }}
-#   }},
-#   "strengths_and_weaknesses": [
-#      {{
-#         "type": "strength",
-#         "title": "<title for strength>",
-#         "description": "<description of the strength>"
-#      }},
-#      {{
-#         "type": "strength",
-#         "title": "<title for additional strength>",
-#         "description": "<description of the additional strength>"
-#      }},
-#      {{
-#         "type": "strength",
-#         "title": "<title for another strength>",
-#         "description": "<description of the strength>"
-#      }},
-#      {{
-#         "type": "weakness",
-#         "title": "<title for weakness>",
-#         "description": "<description of the weakness>"
-#      }},
-#      {{
-#         "type": "weakness",
-#         "title": "<title for additional weakness>",
-#         "description": "<description of the additional weakness>"
-#      }},
-#      {{
-#         "type": "weakness",
-#         "title": "<title for another weakness>",
-#         "description": "<description of the weakness>"
-#      }}
-#   ]
-# }}
-
-# If most responses are missing, infer realistic approximate values based on context, ensuring every question has a complete set of transcript data and evaluation metrics, but do not overinflate scores.
-#     """
-#     prompt = PromptTemplate(template=template, input_variables=["responses"])
-#     return LLMChain(llm=llm, prompt=prompt)
 
 
 # def create_feedback_analysis_agent():
@@ -441,14 +171,16 @@ def generate_initial_question(
 # 1. Each answered question must be individually scored from 0 to 10 based on quality, clarity, and relevance. Unanswered questions = 0.
 # 2. The overall score = sum of individual question scores. Maximum possible score is {max_score}.
 # 3. The overall summary must reflect specific analysis and give the candidate 2-3 clear and constructive feedback points.
-# 4. Skill analysis must consider:
-#    - Ratio of answered questions
-#    - Language and structure of responses
-#    - Fluency, use of filler words, logical flow
-# 5. Estimate “active_listening” based on how well the candidate addresses the core of each question and references keywords or follow-ups.
-# 6. Avoid random zeros. Use qualitative reasoning for each score and skill metric.
-# 7. Include exactly 3 strengths and 3 weaknesses based on real patterns in the responses.
-# 8. Include completion rate as: (answered_questions / total_questions) * 100, rounded to integer.
+# 4. Skill analysis must be *relative and proportional* to the completeness, consistency, and quality of *all responses together*, not just one.
+# 5. Use the following criteria for skill metrics:
+#    - *Clarity* and *articulation* scale with how clearly and consistently all answers are written and explained.
+#    - *Active listening* should be tied to how well the candidate addresses the core of each question across the board, not just one.
+#    - *Conceptual skills* should reflect understanding demonstrated in multiple answers. If only one answer is strong, scale scores accordingly.
+#    - *Speech scores* must be averaged estimates across all responses, and penalize vague, short, or incomplete answers.
+# 6. Cap the maximum skill sub-score (out of 100) to be no higher than the average percentage of answered questions and quality across responses.
+# 7. Avoid random zeros or overinflated 90+ values unless responses consistently justify them.
+# 8. Include exactly 3 strengths and 3 weaknesses based on real patterns in the responses.
+# 9. Include completion rate as: (answered_questions / total_questions) * 100, rounded to nearest integer.
 
 # Candidate Responses:
 # {responses}
@@ -460,23 +192,23 @@ def generate_initial_question(
 
 #   "skill_analysis": {{
 #      "communication_skills": {{
-#          "clarity": <0-100, scale with completion rate>,
-#          "articulation": <0-100, based on how well structured their sentences and use of language are>,
-#          "active_listening": <0-100, based on attention to question intent and completeness of answers>
+#          "clarity": <0-100>,
+#          "articulation": <0-100>,
+#          "active_listening": <0-100>
 #      }},
 #      "conceptual_understanding": {{
-#          "fundamental_concepts": <0-100, based on correctness of core ideas>,
-#          "theoretical_application": <0-100, scale with real-world application>,
-#          "analytical_reasoning": <0-100, based on how logically responses are framed>
+#          "fundamental_concepts": <0-100>,
+#          "theoretical_application": <0-100>,
+#          "analytical_reasoning": <0-100>
 #      }},
 #      "speech_analysis": {{
-#          "avg_filler_words_used": <integer, estimated count across responses>,
+#          "avg_filler_words_used": <integer>,
 #          "avg_confidence_level": "<High|Medium|Low>",
-#          "avg_fluency_rate": <0-100, based on flow of language and sentence construction>
+#          "avg_fluency_rate": <0-100>
 #      }},
 #      "time_management": {{
 #          "average_response_time": "<e.g., '35 seconds'>",
-#          "question_completion_rate": <int: percentage of answered questions>
+#          "question_completion_rate": <int: percentage of answered questions>,
 #          "total_time_spent": "<e.g., '3 minutes 4 seconds'>"
 #      }}
 #   }},
@@ -529,88 +261,87 @@ def generate_initial_question(
 
 def create_feedback_analysis_agent():
     template = """
-You are a highly experienced and consistent interview evaluator. Based on the candidate's interview responses provided below as JSON, generate a detailed and structured JSON report that strictly follows the FreeReview schema.
+You are a highly consistent and objective interview evaluator.
 
-Key Instructions:
-1. Each answered question must be individually scored from 0 to 10 based on quality, clarity, and relevance. Unanswered questions = 0.
-2. The overall score = sum of individual question scores. Maximum possible score is {max_score}.
-3. The overall summary must reflect specific analysis and give the candidate 2-3 clear and constructive feedback points.
-4. Skill analysis must be *relative and proportional* to the completeness, consistency, and quality of *all responses together*, not just one.
-5. Use the following criteria for skill metrics:
-   - *Clarity* and *articulation* scale with how clearly and consistently all answers are written and explained.
-   - *Active listening* should be tied to how well the candidate addresses the core of each question across the board, not just one.
-   - *Conceptual skills* should reflect understanding demonstrated in multiple answers. If only one answer is strong, scale scores accordingly.
-   - *Speech scores* must be averaged estimates across all responses, and penalize vague, short, or incomplete answers.
-6. Cap the maximum skill sub-score (out of 100) to be no higher than the average percentage of answered questions and quality across responses.
-7. Avoid random zeros or overinflated 90+ values unless responses consistently justify them.
-8. Include exactly 3 strengths and 3 weaknesses based on real patterns in the responses.
-9. Include completion rate as: (answered_questions / total_questions) * 100, rounded to nearest integer.
+You are reviewing structured interview responses. Each response contains:
+- `question`: the question asked
+- `speech_analysis`: an object with the candidate's transcripted answer and speaking metrics
+
+Inside `speech_analysis`, you'll find:
+- transcript: the full answer text
+- fluency_score, confidence_score, clarity_score
+- filler_words, words_per_minute, time_seconds
+- answer_relevance_score and observation
+
+You must generate a complete evaluation based on:
+- How well the candidate answered each question (content + relevance)
+- How clearly and confidently they spoke
+- Trends or patterns in delivery, speech, or gaps across answers
+
+### Scoring Instructions:
+1. Score each answered question from 0 to 10 (unanswered = 0)
+2. overall_score = sum of scores across all questions (max: {max_score})
+3. Use `speech_analysis.transcript` for qualitative judgments
+4. Use fluency, confidence, clarity, and relevance scores as secondary signals
+5. Use completion percentage to scale skill scores proportionally
+6. Be realistic — avoid inflated 90+ values unless consistently earned
+
+### Final Output Must Include:
+
+- A 2–3 sentence `overall_summary`
+- `skill_analysis` with 4 sub-categories:
+  - communication_skills
+  - conceptual_understanding
+  - speech_analysis
+  - time_management
+- Exactly 3 strengths and 3 weaknesses based on real recurring traits
+
+Completion Rate = (answered_questions / total_questions) * 100
 
 Candidate Responses:
 {responses}
 
-Output the JSON object in exactly this format:
+Now return only a valid JSON object in this structure:
 {{
-  "overall_score": <realistic total score from 0 to {max_score}>,
-  "overall_summary": "<2-3 sentence feedback directly to candidate>",
-  
+  "overall_score": <0–{max_score}>,
+  "overall_summary": "<summary>",
   "skill_analysis": {{
-     "communication_skills": {{
-         "clarity": <0-100>,
-         "articulation": <0-100>,
-         "active_listening": <0-100>
-     }},
-     "conceptual_understanding": {{
-         "fundamental_concepts": <0-100>,
-         "theoretical_application": <0-100>,
-         "analytical_reasoning": <0-100>
-     }},
-     "speech_analysis": {{
-         "avg_filler_words_used": <integer>,
-         "avg_confidence_level": "<High|Medium|Low>", 
-         "avg_fluency_rate": <0-100>
-     }},
-     "time_management": {{
-         "average_response_time": "<e.g., '35 seconds'>",
-         "question_completion_rate": <int: percentage of answered questions>,
-         "total_time_spent": "<e.g., '3 minutes 4 seconds'>"
-     }}
+    "communication_skills": {{
+      "clarity": <0–100>,
+      "articulation": <0–100>,
+      "active_listening": <0–100>
+    }},
+    "conceptual_understanding": {{
+      "fundamental_concepts": <0–100>,
+      "theoretical_application": <0–100>,
+      "analytical_reasoning": <0–100>
+    }},
+    "speech_analysis": {{
+      "avg_filler_words_used": <int>,
+      "avg_confidence_level": "<High|Medium|Low>",
+      "avg_fluency_rate": <0–100>
+    }},
+    "time_management": {{
+      "average_response_time": "<e.g., '35 seconds'>",
+      "question_completion_rate": <int>,
+      "total_time_spent": "<e.g., '3 minutes 4 seconds'>"
+    }}
   }},
   "strengths_and_weaknesses": [
-     {{
-        "type": "strength",
-        "title": "<strength title>",
-        "description": "<detailed explanation>"
-     }},
-     {{
-        "type": "strength",
-        "title": "<another strength title>",
-        "description": "<detailed explanation>"
-     }},
-     {{
-        "type": "strength",
-        "title": "<another strength title>",
-        "description": "<detailed explanation>"
-     }},
-     {{
-        "type": "weakness",
-        "title": "<weakness title>",
-        "description": "<detailed explanation>"
-     }},
-     {{
-        "type": "weakness",
-        "title": "<another weakness title>",
-        "description": "<detailed explanation>"
-     }},
-     {{
-        "type": "weakness",
-        "title": "<another weakness title>",
-        "description": "<detailed explanation>"
-     }}
+    {{
+      "type": "strength",
+      "title": "<...>",
+      "description": "<...>"
+    }},
+    ...
+    {{
+      "type": "weakness",
+      "title": "<...>",
+      "description": "<...>"
+    }}
   ]
 }}
 """
-
     prompt = PromptTemplate(
         template=template,
         input_variables=[
@@ -696,20 +427,98 @@ def generate_feedback_paid(qaa: str, years_of_experience: int):
     return agent.invoke({"responses": qaa, "years_of_experience": years_of_experience})
 
 
-# API Endpoint to Start Interview
-@app.post("/start_interview")
-def start_interview(interview_input: InterviewInput):
-    question_agent = create_dynamic_question_agent()
-    response = question_agent.invoke(interview_input.dict())
-    return response  # Returns greeting and 10 questions
+def create_resume_summary_agent():
+    template = """
+    Carefully read and analyze the following resume content.
+
+    Your task is to write a single, well-structured paragraph summarizing the candidate’s:
+    - Core technical skills
+    - Tools and frameworks used
+    - Industry/domain experience
+    - Notable achievements or strengths
+
+    Summary Requirements:
+    - Output only one cohesive paragraph
+    - Do not use bullet points, lists, or headings
+    - Keep the tone professional, concise, and neutral
+    - Do not include any introductory or closing statements
+    - Limit the output to approximately 80 to 120 words
+
+    Resume:
+    {resume_text}
+
+    Return only the final summary paragraph.
+    """
+
+    prompt = PromptTemplate(template=template, input_variables=["resume_text"])
+    return LLMChain(llm=llm, prompt=prompt)
 
 
-@app.post("/get_interview_feedback")
-def get_interview_feedback(feedback_input: FeedbackInput):
-    feedback_agent = create_feedback_analysis_agent()
-    response = feedback_agent.invoke({"responses": feedback_input.qaa})
-    return response
+def summarize_resume(resume_text: str) -> str:
+    try:
+        wrapper = create_resume_summary_agent()
+        response = wrapper.invoke({"resume_text": resume_text})
+        return response.get("text", "").strip()
+    except Exception as e:
+        logging.error(f"LangChain resume summarization failed: {e}")
+        return ""
+
+
+def create_audio_analysis_agent_with_question():
+    template = """
+    You are a communication coach evaluating an interview candidate's spoken response.
+
+    Below is the interview question and the candidate's transcripted response, with the total speaking duration in seconds.
+
+    Question:
+    {question_text}
+
+    Transcript:
+    {transcript_text}
+
+    Duration: {duration_seconds} seconds
+
+    Evaluate the following based on:
+    - How well the candidate understood and addressed the question
+    - Their communication skills: fluency, confidence, and clarity
+    - Their delivery style: pacing, filler usage, and coherence
+
+    Output a JSON object in this format with no extra text:
+    {{
+      "fluency_score": <float>,               // 0 to 100
+      "confidence_score": <float>,            // 0 to 100
+      "clarity_score": <float>,               // 0 to 100
+      "words_per_minute": <float>,
+      "filler_words_used": ["list", "of", "fillers"],
+      "answer_relevance_score": <float>,      // 0 to 100 - how well they answered the question
+    }}
+    """
+
+    prompt = PromptTemplate(
+        template=template,
+        input_variables=["question_text", "transcript_text", "duration_seconds"],
+    )
+
+    return LLMChain(llm=llm, prompt=prompt)
+
+
+def analyze_audio(
+    question_text: str, transcript_text: str, duration_seconds: int
+) -> dict:
+    try:
+        wrapper = create_audio_analysis_agent_with_question()
+        return wrapper.invoke(
+            {
+                "question_text": question_text,
+                "transcript_text": transcript_text,
+                "duration_seconds": duration_seconds,
+            }
+        )
+
+    except Exception as e:
+        logging.error(f"LangChain resume summarization failed: {e}")
+        return ""
 
 
 # Log success
-logging.info("Interview AI API is up and running successfully.")
+logging.info("AI wrapper is up and running successfully.")
