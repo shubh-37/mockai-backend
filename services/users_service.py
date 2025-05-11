@@ -19,6 +19,8 @@ import redis.asyncio as redis_asyncio
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 from dotenv import load_dotenv
+import openai_utils
+import common_utils
 
 load_dotenv()
 
@@ -264,16 +266,6 @@ async def update_profile(
         logging.exception(f"Error updating profile: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
-    except HTTPException as http_exc:
-        logging.error(f"HTTP error updating profile: {http_exc.detail}")
-        raise http_exc
-    except Exception as e:
-        logging.exception("Unexpected error updating profile.")
-        raise HTTPException(
-            status_code=500,
-            detail=f"An unexpected error occurred while updating the profile: {str(e)}",
-        )
-
 
 @router.get("/profile", response_model=dict)
 async def get_profile(current_user: str = Depends(auth.get_current_user)):
@@ -474,8 +466,9 @@ async def upload_resume(
             region_name=os.getenv("AWS_ACCESS_REGION"),
         )
         file_content = await file.read()
-        await file.seek(0)
+        await file.seek(0)  # Reset pointer for later use
 
+        # Upload to S3
         s3_client.upload_fileobj(
             BytesIO(file_content),
             bucket_name,
@@ -483,10 +476,19 @@ async def upload_resume(
             ExtraArgs={"ContentType": file.content_type},
         )
 
-        user_doc.resume = unique_filename
-        await user_doc.save()
+        # Extract and summarize
+        resume_url = f"https://{bucket_name}.s3.amazonaws.com/{unique_filename}"
+        resume_text = common_utils.extract_resume_text_from_s3_url(resume_url)
+        resume_summary = openai_utils.summarize_resume(resume_text)
 
-        return {"message": "Resume uploaded successfully."}
+        # Save to user profile
+        user_doc.resume = unique_filename
+        user_doc.resume_summary = resume_summary  # <-- store summary
+        await user_doc.save()
+        logging.info(f"Resume uploaded and summarized successfully. {resume_summary}")
+        return {
+            "message": "Resume uploaded successfully.",
+        }
 
     except Exception as e:
         logging.exception("Error uploading resume to AWS S3.")
