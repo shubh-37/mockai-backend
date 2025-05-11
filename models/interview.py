@@ -109,6 +109,7 @@ class SpeechAnalysis(Document):
     time_seconds: Optional[float] = None
     clarity_score: Optional[float] = None
     words_per_minute: Optional[float] = None
+    answer_relevance_score: Optional[float] = None
 
 
 class QuestionResponse(Document):
