@@ -21,6 +21,7 @@ class User(Document):
     organization: Optional[Link[Company]] = None
     aboutMe: Optional[str] = None
     model_config = ConfigDict(arbitrary_types_allowed=True)
+    resume_summary: Optional[str] = None
 
     class Settings:
         name = "users"
