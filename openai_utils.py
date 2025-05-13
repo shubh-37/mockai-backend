@@ -16,11 +16,24 @@ app = FastAPI()
 logging.basicConfig(level=logging.INFO)
 
 # Initialize Free OpenAI model (for general use)
-llm = ChatOpenAI(
+best_llm = ChatOpenAI(
     api_key=os.getenv("OPENAI_API_KEY"),
     model_name="gpt-4",
     temperature=0.7,
     max_tokens=1024,
+)
+
+fast_llm = ChatOpenAI(
+    api_key=os.getenv("OPENAI_API_KEY"),
+    model_name="gpt-3.5-turbo-1106",
+    temperature=0.3,
+    max_tokens=1024,
+)
+
+free_llm = ChatOpenAI(
+    api_key=os.getenv("OPENAI_API_KEY"),
+    model_name="gpt-3.5-turbo",
+    temperature=0.2,
 )
 
 
@@ -141,7 +154,7 @@ def create_dynamic_question_agent():
             "field",
         ],
     )
-    return LLMChain(llm=llm, prompt=prompt)
+    return LLMChain(llm=fast_llm, prompt=prompt)
 
 
 def generate_initial_question(
@@ -351,63 +364,78 @@ Now return only a valid JSON object in this structure:
             "max_score",
         ],
     )
-    return LLMChain(llm=llm, prompt=prompt)
+    return LLMChain(llm=fast_llm, prompt=prompt)
 
 
 def create_feedback_analysis_agent_paid():
     template = """
-You are a seasoned interview evaluator with a focus on technical skills and career guidance. Based on the candidate's interview responses provided below as JSON, generate a detailed JSON report that strictly adheres to the PaidReview schema. Do not include any text or explanation outside of valid JSON. Even if the candidate's responses are brief, infer and provide realistic values based on subtle cues and overall expectations.
-Also provide career path recommendations based on the candidate's performance and years of experience {years_of_experience} years.
+You are a seasoned interview evaluator and career coach.
+
+Your job is to:
+1. Review each of the candidate's responses and provide insightful analysis
+2. Score various performance dimensions from 0 to 100
+3. Recommend suitable career roles with skill-match justification
+4. Provide a model-generated ideal answer ("apt_answer") for each question
+
+Each response contains:
+- `question`: The original question
+- `question_id`: A unique reference
+- `answer`: Candidate's answer and may contain null value if the question is not answered
+
+Please infer realistic feedback, even if the responses are brief or partial. Highlight practical gaps and strengths. Do not return "N/A" or zeros unless content is truly missing.
+
+Candidate's years of experience: {years_of_experience} years
+
 Candidate Responses:
 {responses}
 
-Output the JSON object exactly in the following format:
+Your output must strictly follow this JSON structure — no extra commentary or explanation outside the JSON:
+
 {{
   "question_analysis": [
-     {{
-       "question": "<question text>",
-       "question_id": "<unique identifier>",
-       "quick_analysis": "<concise yet detailed evaluation, highlighting strengths, gaps, and improvement areas>"
-     }}
+    {{
+      "question": "<original question>",
+      "question_id": "<unique id>",
+      "quick_analysis": "<objective evaluation of response: strengths, areas of improvement>",
+      "apt_answer": "<a well-written, ideal answer to this question>"
+    }}
   ],
   "performance_metrics": {{
-     "critical_thinking": <number between 0 and 100>,
-     "logical_reasoning": <number between 0 and 100>,
-     "problem_solving": <number between 0 and 100>,
-     "adaptability": <number between 0 and 100>,
-     "creativity": <number between 0 and 100>,
-     "foundational_knowledge": <number between 0 and 100>,
-     "advanced_concepts": <number between 0 and 100>,
-     "practical_application": <number between 0 and 100>,
-     "articulation": <number between 0 and 100>,
-     "technical_terms": <number between 0 and 100>,
-     "active_listening": <number between 0 and 100>
+    "critical_thinking": <0-100>,
+    "logical_reasoning": <0-100>,
+    "problem_solving": <0-100>,
+    "adaptability": <0-100>,
+    "creativity": <0-100>,
+    "foundational_knowledge": <0-100>,
+    "advanced_concepts": <0-100>,
+    "practical_application": <0-100>,
+    "articulation": <0-100>,
+    "technical_terms": <0-100>,
+    "active_listening": <0-100>
   }},
   "career_path_recommendations": [
-     {{
-       "recommended_role": "<role_1>",
-       "skill_match": <number between 0 and 100>,
-       "skills": ["<skill1>", "<skill2>", "<skill3>"]
-     }}
-     {{
-       "recommended_role": "<role_2>",
-       "skill_match": <number between 0 and 100>,
-       "skills": ["<skill1>", "<skill2>", "<skill3>"]
-     }}
-     {{
-       "recommended_role": "<role_3>",
-       "skill_match": <number between 0 and 100>,
-       "skills": ["<skill1>", "<skill2>", "<skill3>"]
-     }}
+    {{
+      "recommended_role": "<title>",
+      "skill_match": <0-100>,
+      "skills": ["<skill1>", "<skill2>", "<skill3>"]
+    }},
+    {{
+      "recommended_role": "<title>",
+      "skill_match": <0-100>,
+      "skills": ["<skill1>", "<skill2>", "<skill3>"]
+    }},
+    {{
+      "recommended_role": "<title>",
+      "skill_match": <0-100>,
+      "skills": ["<skill1>", "<skill2>", "<skill3>"]
+    }}
   ]
 }}
-
-If the candidate's responses are insufficient, infer and provide approximate realistic values rather than defaulting to 0 or "N/A".
-    """
+"""
     prompt = PromptTemplate(
         template=template, input_variables=["responses", "years_of_experience"]
     )
-    return LLMChain(llm=llm, prompt=prompt)
+    return LLMChain(llm=best_llm, prompt=prompt)
 
 
 def generate_feedback(qaa: str, total: int, answered: int, max_score: int):
@@ -451,7 +479,7 @@ def create_resume_summary_agent():
     """
 
     prompt = PromptTemplate(template=template, input_variables=["resume_text"])
-    return LLMChain(llm=llm, prompt=prompt)
+    return LLMChain(llm=free_llm, prompt=prompt)
 
 
 def summarize_resume(resume_text: str) -> str:
@@ -499,7 +527,7 @@ def create_audio_analysis_agent_with_question():
         input_variables=["question_text", "transcript_text", "duration_seconds"],
     )
 
-    return LLMChain(llm=llm, prompt=prompt)
+    return LLMChain(llm=fast_llm, prompt=prompt)
 
 
 def analyze_audio(
