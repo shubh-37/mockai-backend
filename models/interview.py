@@ -57,6 +57,7 @@ class QuestionAnalysis(Document):
     question: str
     question_id: str
     quick_analysis: Optional[str] = None
+    apt_answer: Optional[str] = None
 
 
 class PerformanceMetrics(Document):
