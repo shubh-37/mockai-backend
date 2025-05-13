@@ -120,20 +120,24 @@ async def generate_questions(
             }
         )
 
-    if db_user.resume_summary:
+    if db_user.resume_summary and len(db_user.resume_summary) > 0:
         logging.info("Using cached resume summary")
-        resume_text = db_user.resume_summary
+        resume_summary = db_user.resume_summary
     else:
         logging.info("Extracting resume summary from S3")
-        resume_text = common_utils.extract_resume_text_from_s3_url(db_user.resume_url)
-        db_user.resume_summary = resume_text
+        bucket_name = "mockai-resume"
+        resume_url = f"https://{bucket_name}.s3.amazonaws.com/{db_user.resume}"
+        logging.info(f"Resume URL: {resume_url}")
+        resume_text = common_utils.extract_resume_text_from_s3_url(resume_url)
+        resume_summary = openai_utils.summarize_resume(resume_text)
+        db_user.resume_summary = resume_summary
         await db_user.save()
-
+    company_doc = await db_user.organization.fetch()
     try:
         agent_response = openai_utils.generate_initial_question(
             job_role=db_user.job_role,
-            company=db_user.organization,
-            resume_summary=resume_text,
+            company=company_doc.name,
+            resume_summary=resume_summary,
             field=db_user.field,
             years_of_experience=db_user.years_of_experience,
         )
@@ -185,7 +189,7 @@ async def interview_convo(
         return JSONResponse(
             content={
                 "message": "Interview already submitted.",
-                "review": interview_doc.free_review,
+                "review": interview_doc.free_review.dict(),
                 "user_data": interview_doc.user_data,
                 "completion_percentage": interview_doc.completion_percentage,
             }
@@ -573,25 +577,32 @@ async def transcribe_audio(
             raise HTTPException(
                 status_code=404, detail="question_id not found in interview"
             )
-
         speech_metrics = openai_utils.analyze_audio(
             question_text=question_text,
             transcript_text=transcript_text,
             duration_seconds=duration_seconds,
         )
 
+        # Parse the JSON response from speech_metrics
+        try:
+            metrics_dict = json.loads(speech_metrics["text"])
+            logging.info("Parsed metrics dict: %s", metrics_dict)
+        except (json.JSONDecodeError, KeyError) as e:
+            logging.error("Error parsing speech metrics: %s", e)
+            metrics_dict = {}
+
         # Update question response
         for qr in interview_doc.question_responses:
             if qr.question_id == question_id:
                 qr.speech_analysis = SpeechAnalysis(
                     transcript=transcript_text,
-                    fluency_score=speech_metrics.get("fluency_score", 0.0),
-                    confidence_score=speech_metrics.get("confidence_score", 0.0),
-                    clarity_score=speech_metrics.get("clarity_score", 0.0),
-                    words_per_minute=speech_metrics.get("words_per_minute", 0.0),
-                    filler_words=speech_metrics.get("filler_words_used", []),
+                    fluency_score=metrics_dict.get("fluency_score", 0.0),
+                    confidence_score=metrics_dict.get("confidence_score", 0.0),
+                    clarity_score=metrics_dict.get("clarity_score", 0.0),
+                    words_per_minute=metrics_dict.get("words_per_minute", 0.0),
+                    filler_words=metrics_dict.get("filler_words_used", []),
                     time_seconds=duration_seconds,
-                    answer_relevance_score=speech_metrics.get(
+                    answer_relevance_score=metrics_dict.get(
                         "answer_relevance_score", 0.0
                     ),
                 )
