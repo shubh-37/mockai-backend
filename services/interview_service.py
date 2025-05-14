@@ -133,6 +133,22 @@ async def generate_questions(
         db_user.resume_summary = resume_summary
         await db_user.save()
     company_doc = await db_user.organization.fetch()
+    previous_interview = (
+        await Interview.find(
+            {"user_id.$id": ObjectId(db_user.id)},
+            {"_id": {"$ne": ObjectId(interview_doc.id)}},
+            {"question_responses": {"$ne": None}},
+        )
+        .sort("-created_at")
+        .first_or_none()
+    )
+    previous_questions = []
+    if previous_interview:
+        for q in previous_interview.question_responses:
+            if q.question:
+                previous_questions.append(q.question)
+
+    logging.info(f"Found {len(previous_questions)} previous questions")
     try:
         agent_response = openai_utils.generate_initial_question(
             job_role=db_user.job_role,
@@ -140,6 +156,7 @@ async def generate_questions(
             resume_summary=resume_summary,
             field=db_user.field,
             years_of_experience=db_user.years_of_experience,
+            previous_questions=previous_questions,
         )
 
         parsed = json.loads(agent_response.get("text", agent_response))
@@ -306,6 +323,7 @@ async def interview_feedback(
                     "time_seconds": qa.speech_analysis.time_seconds,
                     "words_per_minute": qa.speech_analysis.words_per_minute,
                     "answer": qa.speech_analysis.transcript,
+                    "answer_relevance_score": qa.speech_analysis.answer_relevance_score,
                 }
 
         # Modify this section to handle questions without speech analysis
@@ -325,6 +343,7 @@ async def interview_feedback(
                         "time_seconds",
                         "words_per_minute",
                         "answer",
+                        "answer_relevance_score",
                     ]
                 ):
                     # If no speech analysis exists, add placeholder or keep existing data
@@ -337,6 +356,7 @@ async def interview_feedback(
                             "time_seconds": None,
                             "answer": None,
                             "words_per_minute": None,
+                            "answer_relevance_score": None,
                         }
                     )
 
@@ -388,6 +408,7 @@ async def interview_feedback(
                     "time_seconds": qa.speech_analysis.time_seconds,
                     "words_per_minute": qa.speech_analysis.words_per_minute,
                     "answer": qa.speech_analysis.transcript,
+                    "answer_relevance_score": qa.speech_analysis.answer_relevance_score,
                 }
 
         # Modify this section to handle questions without speech analysis
@@ -407,6 +428,7 @@ async def interview_feedback(
                         "time_seconds",
                         "words_per_minute",
                         "answer",
+                        "answer_relevance_score",
                     ]
                 ):
                     # If no speech analysis exists, add placeholder or keep existing data
@@ -419,6 +441,7 @@ async def interview_feedback(
                             "time_seconds": None,
                             "words_per_minute": None,
                             "answer": None,
+                            "answer_relevance_score": None,
                         }
                     )
 

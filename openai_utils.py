@@ -20,14 +20,12 @@ best_llm = ChatOpenAI(
     api_key=os.getenv("OPENAI_API_KEY"),
     model_name="gpt-4",
     temperature=0.7,
-    max_tokens=1024,
 )
 
 fast_llm = ChatOpenAI(
     api_key=os.getenv("OPENAI_API_KEY"),
     model_name="gpt-3.5-turbo-1106",
-    temperature=0.3,
-    max_tokens=1024,
+    temperature=0.7,
 )
 
 free_llm = ChatOpenAI(
@@ -104,45 +102,57 @@ class FeedbackInput(BaseModel):
 
 def create_dynamic_question_agent():
     template = """
-        You are a smart and friendly interview assistant.
+You are a smart and friendly interview assistant.
 
-        Step 1: Greet the candidate warmly. Start with a friendly, conversational introductory question that invites them to introduce themselves.
+Your goal is to generate exactly 10 thoughtful and well-structured interview questions, beginning with a warm, friendly introduction.
 
-        Step 2: Generate 9 thoughtful and well-balanced interview questions tailored to a candidate applying for the role of {job_role} at {company}, in the field of {field}, with {years_of_experience} years of experience.
+---
 
-        Step 3: Use the following resume summary to guide your questions. Focus on:
-        - Core skills and competencies
-        - Tools, systems, or methodologies mentioned
-        - Past industries, job functions, or responsibilities
-        - Any notable achievements or standout traits
+**Candidate Info**
+- Role: {job_role}
+- Company: {company}
+- Field: {field}
+- Years of Experience: {years_of_experience}
 
-        Resume Summary:
-        {resume_summary}
+**Resume Summary:**
+{resume_summary}
 
-        Step 4: If the company "{company}" is well-known (e.g., Meta, McKinsey, Deloitte, Amazon), include 1–2 questions inspired by its typical interview style. If not, ask questions relevant to the broader industry or functional context.
+{previous_questions_section}
 
-        Required Question Structure:
-        1. Friendly introductory question to ask the candidate to introduce themselves
-        2. Deep role-relevant question based on resume summary (domain expertise)
-        3. Question on a different but relevant skill/area
-        4. Advanced or strategic scenario to assess depth of understanding
-        5. Real-world problem-solving or task-based question
-        6. Question about best practices or optimization in the candidate's field
-        7. Tools, platforms, or methodology familiarity question (based on resume summary)
-        8. Troubleshooting or decision-making scenario
-        9. Awareness of current trends or innovations in the industry
-        10. Cultural fit, collaboration, or communication question
+---
 
-        Output only a valid JSON object exactly in the following format. Do not include any explanation or text outside the JSON:
-        {{
-            "greeting": "<warm greeting message>",
-            "questions": [
-                "<Question 1>",
-                "<Question 2>",
-                "... up to Question 10"
-            ]
-        }}
-    """
+**Instructions**
+
+1. **Introductory Question (Q1)**:
+   - Start with a friendly, warm, and conversational prompt asking the candidate to introduce themselves.
+   - This question must always be included.
+
+2. **Questions 2–10** must be:
+   - Professionally written
+   - Role-specific
+   - Personalized based on the resume summary (tools, domains, responsibilities, strengths)
+   - Diverse — covering multiple facets such as domain knowledge, tools, thinking style, communication, etc.
+
+3. If "{company}" is a well-known firm (e.g., Meta, McKinsey, Deloitte, Amazon), include 1–2 questions inspired by its typical interview approach (e.g., structured thinking, leadership scenarios, estimation).
+
+4. You must generate exactly 10 questions including the intro. Do not stop at 9.
+
+5. Do not repeat or closely mirror any of the candidate’s previously asked questions (if provided).
+
+---
+
+Output only a valid JSON object in the following format. Do not include anything else:
+{{
+  "greeting": "<warm greeting message>",
+  "questions": [
+    "<Intro question - Q1>",
+    "<Q2>",
+    "<Q3>",
+    "...",
+    "<Q10>"
+  ]
+}}
+"""
 
     prompt = PromptTemplate(
         template=template,
@@ -152,19 +162,30 @@ def create_dynamic_question_agent():
             "resume_summary",
             "years_of_experience",
             "field",
+            "previous_questions_section",
         ],
     )
+
     return LLMChain(llm=fast_llm, prompt=prompt)
 
 
 def generate_initial_question(
     job_role: str,
     company: str,
-    resume_summary: str = None,
-    years_of_experience: int = None,
-    field: str = None,
+    resume_summary: str,
+    years_of_experience: int,
+    field: str,
+    previous_questions: list[str] = None,
 ):
     agent = create_dynamic_question_agent()
+
+    previous_questions_section = (
+        "Previously asked questions (do not repeat or paraphrase):\n"
+        + "\n".join([f"- {q}" for q in previous_questions])
+        if previous_questions
+        else "No previous questions. This is the candidate's first interview."
+    )
+
     return agent.invoke(
         {
             "job_role": job_role,
@@ -172,6 +193,7 @@ def generate_initial_question(
             "resume_summary": resume_summary,
             "years_of_experience": years_of_experience,
             "field": field,
+            "previous_questions_section": previous_questions_section,
         }
     )
 
@@ -371,33 +393,37 @@ def create_feedback_analysis_agent_paid():
     template = """
 You are a seasoned interview evaluator and career coach.
 
-Your job is to:
-1. Review each of the candidate's responses and provide insightful analysis
-2. Score various performance dimensions from 0 to 100
-3. Recommend suitable career roles with skill-match justification
-4. Provide a model-generated ideal answer ("apt_answer") for each question
+Your task is to:
+1. Review each of the candidate's responses (answered or not) and provide consistent evaluation.
+2. Score key performance areas (0–100 scale).
+3. Suggest 3 career paths based on the overall skill profile.
+4. Generate an ideal answer ("apt_answer") for every question.
 
-Each response contains:
-- `question`: The original question
-- `question_id`: A unique reference
-- `answer`: Candidate's answer and may contain null value if the question is not answered
+Each item in the list below represents a question object. All of them MUST be evaluated in your response.
 
-Please infer realistic feedback, even if the responses are brief or partial. Highlight practical gaps and strengths. Do not return "N/A" or zeros unless content is truly missing.
+Each object contains:
+- `question`: the actual question
+- `question_id`: a unique reference
+- `answer`: the candidate's answer text or `null` (if unanswered)
 
-Candidate's years of experience: {years_of_experience} years
+There are {question_count} questions total. You must return exactly {question_count} items in the `question_analysis` array — even if some answers are empty or vague.
+
+If a question is not answered (null or empty), still include a realistic analysis and an ideal model answer.
+
+Candidate's experience: {years_of_experience} years
 
 Candidate Responses:
 {responses}
 
-Your output must strictly follow this JSON structure — no extra commentary or explanation outside the JSON:
+Return strictly the following JSON format and nothing else:
 
 {{
   "question_analysis": [
     {{
       "question": "<original question>",
       "question_id": "<unique id>",
-      "quick_analysis": "<objective evaluation of response: strengths, areas of improvement>",
-      "apt_answer": "<a well-written, ideal answer to this question>"
+      "quick_analysis": "<evaluation of the given answer — or 'Not answered, but expected...' if missing>",
+      "apt_answer": "<ideal answer to this question>"
     }}
   ],
   "performance_metrics": {{
@@ -433,7 +459,8 @@ Your output must strictly follow this JSON structure — no extra commentary or 
 }}
 """
     prompt = PromptTemplate(
-        template=template, input_variables=["responses", "years_of_experience"]
+        template=template,
+        input_variables=["responses", "years_of_experience", "question_count"],
     )
     return LLMChain(llm=best_llm, prompt=prompt)
 
@@ -452,7 +479,13 @@ def generate_feedback(qaa: str, total: int, answered: int, max_score: int):
 
 def generate_feedback_paid(qaa: str, years_of_experience: int):
     agent = create_feedback_analysis_agent_paid()
-    return agent.invoke({"responses": qaa, "years_of_experience": years_of_experience})
+    return agent.invoke(
+        {
+            "responses": qaa,
+            "years_of_experience": years_of_experience,
+            "question_count": len(qaa),
+        }
+    )
 
 
 def create_resume_summary_agent():
