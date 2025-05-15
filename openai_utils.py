@@ -411,8 +411,14 @@ If a question is not answered (null or empty), still include a realistic analysi
 
 Candidate's experience: {years_of_experience} years
 
+---
+
 Candidate Responses:
 {responses}
+
+---
+
+Now begin your response.
 
 Strictly return only a raw JSON object with the following structure without wrapping it in markdown, code blocks, or extra text:
 
