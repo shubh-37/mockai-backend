@@ -3,7 +3,7 @@ import fitz
 import tempfile
 import os
 import logging
-
+import re
 
 def extract_resume_text_from_s3_url(resume_url: str, char_limit: int = 3000) -> str:
     try:
@@ -25,3 +25,15 @@ def extract_resume_text_from_s3_url(resume_url: str, char_limit: int = 3000) -> 
     except Exception as e:
         logging.error(f"Error processing resume from S3: {e}")
         return ""
+
+
+def extract_json_from_llm_text(text: str) -> str:
+    """Strip markdown code blocks and extract clean JSON."""
+    if not text:
+        return ""
+
+    # Remove markdown-style triple backticks and optional 'json'
+    text = re.sub(r"^```(json)?", "", text.strip(), flags=re.IGNORECASE).strip()
+    text = re.sub(r"```$", "", text.strip()).strip()
+
+    return text
