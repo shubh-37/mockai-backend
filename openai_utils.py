@@ -414,7 +414,7 @@ Candidate's experience: {years_of_experience} years
 Candidate Responses:
 {responses}
 
-Return only a raw JSON object with the following structure without wrapping it in markdown, code blocks, or extra text.
+Strictly return only a raw JSON object with the following structure without wrapping it in markdown, code blocks, or extra text:
 
 {{
   "question_analysis": [
