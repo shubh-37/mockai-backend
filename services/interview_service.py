@@ -391,9 +391,11 @@ async def interview_feedback(
         )
 
         logging.info("Raw paid feedback LLM response: %s", raw_paid_feedback)
-        formatted_paid_feedback = common_utils.extract_json_from_llm_text(
-            raw_paid_feedback
-        )
+        formatted_paid_feedback = raw_paid_feedback
+        if isinstance(raw_paid_feedback, str):
+            formatted_paid_feedback = common_utils.extract_json_from_llm_text(
+                raw_paid_feedback
+            )
         if isinstance(formatted_paid_feedback, dict):
             paid_feedback = formatted_paid_feedback
         elif isinstance(formatted_paid_feedback, str):
