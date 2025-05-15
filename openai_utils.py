@@ -17,9 +17,7 @@ logging.basicConfig(level=logging.INFO)
 
 # Initialize Free OpenAI model (for general use)
 best_llm = ChatOpenAI(
-    api_key=os.getenv("OPENAI_API_KEY"),
-    model_name="gpt-4",
-    temperature=0.7,
+    api_key=os.getenv("OPENAI_API_KEY"), model_name="gpt-4o", temperature=0.7
 )
 
 fast_llm = ChatOpenAI(
