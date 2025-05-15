@@ -390,6 +390,8 @@ async def interview_feedback(
             qaa=responses_json, years_of_experience=db_user.years_of_experience
         )
 
+        logging.info("Raw paid feedback LLM response: %s", raw_paid_feedback)
+
         if isinstance(raw_paid_feedback, dict) and "text" in raw_paid_feedback:
             paid_feedback = json.loads(raw_paid_feedback["text"])
         elif isinstance(raw_paid_feedback, str):

@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from langchain_community.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
+import json
 
 load_dotenv()
 
@@ -476,12 +477,19 @@ def generate_feedback(qaa: str, total: int, answered: int, max_score: int):
 
 
 def generate_feedback_paid(qaa: str, years_of_experience: int):
+    try:
+        parsed = json.loads(qaa)
+        question_count = len(parsed)
+    except Exception as e:
+        logging.error("Failed to parse QAA: %s", e)
+        question_count = 0
+
     agent = create_feedback_analysis_agent_paid()
     return agent.invoke(
         {
             "responses": qaa,
             "years_of_experience": years_of_experience,
-            "question_count": len(qaa),
+            "question_count": question_count,
         }
     )
 
