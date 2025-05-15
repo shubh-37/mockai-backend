@@ -390,7 +390,6 @@ async def interview_feedback(
             qaa=responses_json, years_of_experience=db_user.years_of_experience
         )
 
-        logging.info("Raw paid feedback LLM response: %s", raw_paid_feedback)
         formatted_paid_feedback = raw_paid_feedback
         if isinstance(raw_paid_feedback, str):
             formatted_paid_feedback = common_utils.extract_json_from_llm_text(
@@ -402,7 +401,7 @@ async def interview_feedback(
             paid_feedback = json.loads(formatted_paid_feedback)
         else:
             paid_feedback = formatted_paid_feedback
-
+        logging.info("Paid feedback: %s", paid_feedback)
         speech_analysis_map = {}
         for qa in interview_doc.question_responses or []:
             if qa.speech_analysis:
