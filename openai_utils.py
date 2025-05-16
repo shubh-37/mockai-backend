@@ -176,7 +176,7 @@ def generate_initial_question(
     field: str,
     previous_questions: list[str] = None,
 ):
-    agent = create_dynamic_question_agent()
+    wrapper = create_dynamic_question_agent()
 
     previous_questions_section = (
         "Previously asked questions (do not repeat or paraphrase):\n"
@@ -185,7 +185,7 @@ def generate_initial_question(
         else "No previous questions. This is the candidate's first interview."
     )
 
-    return agent.invoke(
+    return wrapper.invoke(
         {
             "job_role": job_role,
             "company": company,
@@ -398,8 +398,6 @@ Your task is to:
 3. Suggest 3 career paths based on the overall skill profile.
 4. Generate an ideal answer ("apt_answer") for every question.
 
-Each item in the list below represents a question object. All of them MUST be evaluated in your response.
-
 Each object contains:
 - `question`: the actual question
 - `question_id`: a unique reference
@@ -411,16 +409,15 @@ If a question is not answered (null or empty), still include a realistic analysi
 
 Candidate's experience: {years_of_experience} years
 
----
+The following is the candidate's input (DO NOT REPEAT THIS in your response):
 
-Candidate Responses:
 {responses}
 
----
+### END OF INPUT
 
 Now begin your response.
 
-Strictly return only a raw JSON object with the following structure without wrapping it in markdown, code blocks, or extra text:
+Return only a valid JSON object with the following structure — no comments, no explanation, no markdown:
 
 {{
   "question_analysis": [
@@ -471,8 +468,8 @@ Strictly return only a raw JSON object with the following structure without wrap
 
 
 def generate_feedback(qaa: str, total: int, answered: int, max_score: int):
-    agent = create_feedback_analysis_agent()
-    return agent.invoke(
+    wrapper = create_feedback_analysis_agent()
+    response = wrapper.invoke(
         {
             "responses": qaa,
             "total_questions": total,
@@ -480,6 +477,7 @@ def generate_feedback(qaa: str, total: int, answered: int, max_score: int):
             "max_score": max_score,
         }
     )
+    return response.get("text", "").strip()
 
 
 def generate_feedback_paid(qaa: str, years_of_experience: int):
@@ -490,14 +488,15 @@ def generate_feedback_paid(qaa: str, years_of_experience: int):
         logging.error("Failed to parse QAA: %s", e)
         question_count = 0
 
-    agent = create_feedback_analysis_agent_paid()
-    return agent.invoke(
+    wrapper = create_feedback_analysis_agent_paid()
+    response = wrapper.invoke(
         {
             "responses": qaa,
             "years_of_experience": years_of_experience,
             "question_count": question_count,
         }
     )
+    return response.get("text", "").strip()
 
 
 def create_resume_summary_agent():
