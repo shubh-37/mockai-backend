@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, APIRouter, Query, File, UploadFile
+from fastapi import Depends, HTTPException, APIRouter, Query, File, UploadFile, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 import httpx
 from models.interview import (
@@ -26,6 +26,8 @@ from google.cloud import texttospeech, storage
 import librosa
 from dotenv import load_dotenv
 import common_utils
+import hmac
+import hashlib
 
 load_dotenv()
 
@@ -687,40 +689,6 @@ async def synthesize_speech(request: schemas.TextToSpeechRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@router.post("/customer_feedback")
-async def create_customer_feedback(
-    feedback_in: CustomerFeedback,
-    interview_id: str = Query(...),
-    current_user: str = Depends(auth.get_current_user),
-):
-    db_user = await User.find_one(User.email == current_user)
-    if not db_user:
-        raise HTTPException(status_code=404, detail="User not found.")
-    try:
-        interview_oid = ObjectId(interview_id)
-    except:
-        raise HTTPException(status_code=400, detail="Invalid interview_id.")
-
-    interview_doc = await Interview.get(interview_oid)
-    if not interview_doc:
-        raise HTTPException(status_code=404, detail="Interview not found.")
-
-    feedback_doc = CustomerFeedback(
-        rating=feedback_in.rating,
-        suggestion=feedback_in.suggestion,
-        user_id=db_user.id,
-    )
-
-    interview_doc.customer_feedback = feedback_doc
-    await interview_doc.save()
-
-    return JSONResponse({"message": "Customer feedback added successfully"})
-
-
-# Need to add an api for razor pay payment gateway
-
-
 @router.get("/check_review")
 async def check_review_availability(
     interview_id: str = Query(...), current_user: str = Depends(auth.get_current_user)
@@ -791,8 +759,7 @@ async def proceed_payment(
         "amount": order_amount_paise,
         "currency": "INR",
         "payment_capture": 1,
-        # "notes": {"user_id": str(db_user.id), "interview_id": str(interview_doc.id)},
-        "notes": {"user_id": str(db_user.id)},
+        "notes": {"user_id": str(db_user.id), "interview_id": str(interview_doc.id)},
     }
     try:
         razorpay_order = razorpay_client.order.create(data=order_data)
@@ -830,11 +797,14 @@ async def verify_payment(
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # 3) Query Razorpay for order details (to retrieve the interview_id from 'notes')
-    try:
-        rzp_order = razorpay_client.order.fetch(payload.order_id)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching order: {str(e)}")
+    existing_payment = await Payment.find_one(
+        Payment.transaction_id == payload.payment_id
+    )
+    if existing_payment:
+        return {
+            "message": "Payment already verified",
+            "payment_id": str(existing_payment.id),
+        }
 
     new_payment = Payment(
         transaction_id=payload.payment_id,
@@ -842,6 +812,7 @@ async def verify_payment(
         payment_date=datetime.utcnow().date(),
         user_id=db_user,
         reviews_bought=payload.reviews_bought,
+        order_id=payload.order_id,
     )
     await new_payment.insert()
 
@@ -874,3 +845,93 @@ async def verify_payment(
         "payment_id": str(new_payment.id),
         "reviews_left": new_payment.reviews_bought,
     }
+
+
+@router.post("/razorpay/webhook")
+async def razorpay_webhook(request: Request):
+    body = await request.body()
+    webhook_secret = os.getenv("RAZORPAY_WEBHOOK_SECRET")
+
+    # Get signature header sent by Razorpay
+    received_signature = request.headers.get("X-Razorpay-Signature")
+    if not received_signature:
+        raise HTTPException(status_code=400, detail="Missing signature header")
+
+    # Compute expected signature
+    expected_signature = hmac.new(
+        webhook_secret.encode("utf-8"), body, hashlib.sha256
+    ).hexdigest()
+
+    if not hmac.compare_digest(received_signature, expected_signature):
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
+    payload = await request.json()
+
+    if payload.get("event") == "payment.captured":
+        payment = payload["payload"]["payment"]["entity"]
+        payment_id = payment["id"]
+        order_id = payment["order_id"]
+        amount = payment["amount"] / 100
+
+        # Optional: Check if this payment already exists
+        existing = await Payment.find_one(Payment.transaction_id == payment_id)
+        if existing:
+            return {"status": "duplicate", "message": "Payment already processed"}
+
+        # Fetch user info from Razorpay 'notes'
+        try:
+            order_data = razorpay_client.order.fetch(order_id)
+            user_id = order_data.get("notes", {}).get("user_id")
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, detail=f"Could not fetch order details: {str(e)}"
+            )
+
+        db_user = await User.get(ObjectId(user_id)) if user_id else None
+        if not db_user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Save payment
+        new_payment = Payment(
+            transaction_id=payment_id,
+            amount=amount,
+            payment_date=datetime.utcnow().date(),
+            user_id=db_user,
+            reviews_bought=1,
+            order_id=order_id,
+        )
+        await new_payment.insert()
+        interview_id = order_data.get("notes", {}).get("interview_id")
+        if interview_id:
+            interview_doc = await Interview.get(ObjectId(interview_id))
+            if interview_doc:
+                interview_doc.payment_id = new_payment
+            await interview_doc.save()
+
+        return {"status": "success", "message": "Payment recorded"}
+
+    return {"status": "ignored", "message": "Event not handled"}
+
+
+@router.get("/interview/status")
+async def interview_payment_status(
+    interview_id: str = Query(...), current_user: str = Depends(auth.get_current_user)
+):
+    db_user = await User.find_one(User.email == current_user)
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    try:
+        interview_obj_id = ObjectId(interview_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid interview_id")
+
+    interview = await Interview.get(interview_obj_id)
+    if not interview or not interview.payment_id:
+        return {"status": "unpaid"}
+
+    payment = await interview.payment_id.fetch()
+    if payment and payment.user_id.id == db_user.id:
+        return {"status": "paid", "payment_id": str(payment.id)}
+
+    return {"status": "unpaid"}

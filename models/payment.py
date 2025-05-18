@@ -13,7 +13,7 @@ class Payment(Document):
     payment_date: Optional[date] = None
     user_id: Optional[Link[User]] = None
     reviews_bought: Optional[int] = 0
-
+    order_id: Optional[str] = None
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     class Settings:
