@@ -22,6 +22,7 @@ class User(Document):
     aboutMe: Optional[str] = None
     model_config = ConfigDict(arbitrary_types_allowed=True)
     resume_summary: Optional[str] = None
+    is_feedback_given: Optional[bool] = False
 
     class Settings:
         name = "users"

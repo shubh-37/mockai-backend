@@ -1,6 +1,6 @@
-from pydantic import BaseModel, EmailStr, field_validator, model_validator
+from pydantic import BaseModel, EmailStr, field_validator, model_validator, Field
 import re
-from typing import Optional, List, Union
+from typing import Optional, List
 
 
 class UserCreate(BaseModel):
@@ -22,9 +22,7 @@ class UserProfile(BaseModel):
     @field_validator("years_of_experience")
     def validate_yrs_of_exp(cls, value: Optional[int]) -> Optional[int]:
         if value is not None and value < 0:
-            raise ValueError(
-                "Invalid Experience (years). It cannot be negative."
-            )
+            raise ValueError("Invalid Experience (years). It cannot be negative.")
         return value
 
     @field_validator("mobile_number")
@@ -84,6 +82,11 @@ class Feedback(BaseModel):
             )
         return values
 
+
+class FeedbackRequest(BaseModel):
+    rating: Optional[int] = Field(None, description="Rating must be between 1 and 5")
+    suggestion: Optional[str] = Field(None, description="Suggestion must be a string")
+    interview_id: Optional[str] = Field(None, description="Interview ID must be a string")
 
 class TextToSpeechRequest(BaseModel):
     text: str
