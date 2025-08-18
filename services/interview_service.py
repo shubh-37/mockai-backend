@@ -76,7 +76,11 @@ async def create_interview(
         user_data={
             "job_role": db_user.job_role,
             "years_of_experience": db_user.years_of_experience,
-            "field": db_user.field,
+            **(
+                {"field": db_user.field}
+                if hasattr(db_user, "field") and db_user.field
+                else {}
+            ),
         },
     )
 
@@ -122,19 +126,6 @@ async def generate_questions(
             }
         )
 
-    if db_user.resume_summary and len(db_user.resume_summary) > 0:
-        logging.info("Using cached resume summary")
-        resume_summary = db_user.resume_summary
-    else:
-        logging.info("Extracting resume summary from S3")
-        bucket_name = "mockai-resume"
-        resume_url = f"https://{bucket_name}.s3.amazonaws.com/{db_user.resume}"
-        logging.info(f"Resume URL: {resume_url}")
-        resume_text = common_utils.extract_resume_text_from_s3_url(resume_url)
-        resume_summary = openai_utils.summarize_resume(resume_text)
-        db_user.resume_summary = resume_summary
-        await db_user.save()
-    company_doc = await db_user.organization.fetch()
     previous_interview = (
         await Interview.find(
             {"user_id.$id": ObjectId(db_user.id)},
@@ -151,15 +142,92 @@ async def generate_questions(
                 previous_questions.append(q.question)
 
     logging.info(f"Found {len(previous_questions)} previous questions")
-    try:
-        agent_response = openai_utils.generate_initial_question(
-            job_role=db_user.job_role,
-            company=company_doc.name,
-            resume_summary=resume_summary,
-            field=db_user.field,
-            years_of_experience=db_user.years_of_experience,
-            previous_questions=previous_questions,
+
+    # Check if user has minimal required information (job_role and years_of_experience)
+    has_job_role = bool(db_user.job_role and db_user.job_role.strip())
+    has_experience = bool(
+        db_user.years_of_experience is not None and db_user.years_of_experience >= 0
+    )
+
+    if not has_job_role or not has_experience:
+        raise HTTPException(
+            status_code=400,
+            detail="Job role and years of experience are required to generate interview questions.",
         )
+
+    # Check what additional information we have beyond mandatory fields
+    has_resume = bool(db_user.resume and db_user.resume.strip())
+    has_field = bool(db_user.field and db_user.field.strip())
+    has_organization = bool(db_user.organization)
+
+    # Use detailed generation if we have ANY additional info, otherwise use simple
+    use_detailed_generation = has_resume or has_field or has_organization
+
+    try:
+        if use_detailed_generation:
+            logging.info(
+                "Using detailed question generation with available information"
+            )
+
+            # Handle resume summary - use if available, otherwise empty string
+            resume_summary = ""
+            if has_resume:
+                if db_user.resume_summary and len(db_user.resume_summary) > 0:
+                    logging.info("Using cached resume summary")
+                    resume_summary = db_user.resume_summary
+                else:
+                    logging.info("Extracting resume summary from S3")
+                    try:
+                        bucket_name = "mockai-resume"
+                        resume_url = (
+                            f"https://{bucket_name}.s3.amazonaws.com/{db_user.resume}"
+                        )
+                        logging.info(f"Resume URL: {resume_url}")
+                        resume_text = common_utils.extract_resume_text_from_s3_url(
+                            resume_url
+                        )
+                        resume_summary = openai_utils.summarize_resume(resume_text)
+                        db_user.resume_summary = resume_summary
+                        await db_user.save()
+                    except Exception as e:
+                        logging.warning(f"Error processing resume: {e}")
+                        resume_summary = "Resume not available"
+            else:
+                resume_summary = "Resume not provided"
+
+            # Handle company information - use if available, otherwise default
+            company_name = "General Company"
+            if has_organization:
+                try:
+                    company_doc = await db_user.organization.fetch()
+                    company_name = (
+                        company_doc.name if company_doc else "General Company"
+                    )
+                except Exception as e:
+                    logging.warning(f"Error fetching organization: {e}")
+                    company_name = "General Company"
+
+            # Handle field information - use if available, otherwise default
+            field = db_user.field if has_field else "General"
+
+            # Always use detailed generation but with whatever info we have
+            agent_response = openai_utils.generate_initial_question(
+                job_role=db_user.job_role,
+                company=company_name,
+                resume_summary=resume_summary,
+                field=field,
+                years_of_experience=db_user.years_of_experience,
+                previous_questions=previous_questions,
+            )
+        else:
+            logging.info(
+                "Using simple question generation - only job role and experience available"
+            )
+            agent_response = openai_utils.generate_simple_interview_questions(
+                job_role=db_user.job_role,
+                years_of_experience=db_user.years_of_experience,
+                previous_questions=previous_questions,
+            )
 
         parsed = json.loads(agent_response.get("text", agent_response))
 
@@ -170,9 +238,15 @@ async def generate_questions(
         )
 
     question_list = parsed.get("questions", [])
+    if not question_list:
+        raise HTTPException(
+            status_code=500, detail="No questions were generated. Please try again."
+        )
+
     question_responses = [QuestionResponse(question=q) for q in question_list]
 
     interview_doc.question_responses = question_responses
+    interview_doc.generation_type = "detailed" if use_detailed_generation else "simple"
     await interview_doc.save()
 
     return JSONResponse(
@@ -688,6 +762,7 @@ async def synthesize_speech(request: schemas.TextToSpeechRequest):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/check_review")
 async def check_review_availability(

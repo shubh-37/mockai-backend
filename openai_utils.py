@@ -127,16 +127,25 @@ Your goal is to generate exactly 10 thoughtful and well-structured interview que
    - This question must always be included.
 
 2. **Questions 2–10** must be:
-   - Professionally written
-   - Role-specific
-   - Personalized based on the resume summary (tools, domains, responsibilities, strengths)
+   - Professionally written and role-specific
+   - Personalized based on available information (resume summary, field, company if provided)
+   - If resume summary is not available or says "Resume not provided", focus on general role competencies
+   - If company is "General Company", use industry-standard questions rather than company-specific ones
+   - If field is "General", focus on core skills for the job role
    - Diverse — covering multiple facets such as domain knowledge, tools, thinking style, communication, etc.
+   - Appropriate for someone with {years_of_experience} years of experience
 
-3. If "{company}" is a well-known firm (e.g., Meta, McKinsey, Deloitte, Amazon), include 1–2 questions inspired by its typical interview approach (e.g., structured thinking, leadership scenarios, estimation).
+3. Company-specific considerations:
+   - If company is a well-known firm (e.g., Meta, McKinsey, Deloitte, Amazon), include 1–2 questions inspired by its typical interview approach
+   - If company is "General Company", focus on industry-standard practices and common challenges
 
-4. You must generate exactly 10 questions including the intro. Do not stop at 9.
+4. Resume-based personalization:
+   - If resume summary contains specific tools/technologies/domains, tailor questions accordingly
+   - If resume summary is generic or unavailable, use common competencies for the role
 
-5. Do not repeat or closely mirror any of the candidate’s previously asked questions (if provided).
+5. You must generate exactly 10 questions including the intro. Do not stop at 9.
+
+6. Do not repeat or closely mirror any of the candidate's previously asked questions (if provided).
 
 ---
 
@@ -192,6 +201,96 @@ def generate_initial_question(
             "resume_summary": resume_summary,
             "years_of_experience": years_of_experience,
             "field": field,
+            "previous_questions_section": previous_questions_section,
+        }
+    )
+
+
+def create_simple_question_agent():
+    template = """
+You are a smart and friendly interview assistant.
+
+Your goal is to generate exactly 10 thoughtful and well-structured interview questions for a quick interview start, beginning with a warm, friendly introduction.
+
+---
+
+**Candidate Info**
+- Role: {job_role}
+- Years of Experience: {years_of_experience}
+
+{previous_questions_section}
+
+---
+
+**Instructions**
+
+1. **Introductory Question (Q1)**:
+   - Start with a friendly, warm, and conversational prompt asking the candidate to introduce themselves and their background.
+   - This question must always be included.
+
+2. **Questions 2–10** must be:
+   - Professionally written and role-specific
+   - Cover general competencies for the role based on typical requirements
+   - Include a mix of: technical skills, problem-solving, experience-based scenarios, teamwork, and growth mindset
+   - Be appropriate for someone with {years_of_experience} years of experience
+   - Cover diverse aspects: domain knowledge, communication, leadership (if applicable), learning ability, etc.
+
+3. Since specific company/resume details aren't provided, focus on:
+   - Common skills and scenarios for the role
+   - Industry-standard practices and challenges
+   - Behavioral and situational questions
+   - Growth and learning orientation
+
+4. You must generate exactly 10 questions including the intro. Do not stop at 9.
+
+5. Do not repeat or closely mirror any of the candidate's previously asked questions (if provided).
+
+---
+
+Output only a valid JSON object in the following format. Do not include anything else:
+{{
+  "greeting": "<warm greeting message>",
+  "questions": [
+    "<Intro question - Q1>",
+    "<Q2>",
+    "<Q3>",
+    "...",
+    "<Q10>"
+  ]
+}}
+"""
+
+    prompt = PromptTemplate(
+        template=template,
+        input_variables=[
+            "job_role",
+            "years_of_experience",
+            "previous_questions_section",
+        ],
+    )
+
+    return LLMChain(llm=fast_llm, prompt=prompt)
+
+
+def generate_simple_interview_questions(
+    job_role: str,
+    years_of_experience: int,
+    previous_questions: list[str] = None,
+):
+    """Generate interview questions with minimal information - just job role and experience."""
+    wrapper = create_simple_question_agent()
+
+    previous_questions_section = (
+        "Previously asked questions (do not repeat or paraphrase):\n"
+        + "\n".join([f"- {q}" for q in previous_questions])
+        if previous_questions
+        else "No previous questions. This is the candidate's first interview."
+    )
+
+    return wrapper.invoke(
+        {
+            "job_role": job_role,
+            "years_of_experience": years_of_experience,
             "previous_questions_section": previous_questions_section,
         }
     )

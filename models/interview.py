@@ -132,7 +132,7 @@ class Interview(Document):
     company_id: Optional[Link[Company]] = None
     payment_id: Optional[Link[Payment]] = None
     user_aptitude_id: Optional[Link[UserAptitude]] = None
-
+    generation_type: Optional[str] = None
     question_responses: Optional[List[QuestionResponse]] = None
     customer_feedback: Optional[CustomerFeedback] = None
 
