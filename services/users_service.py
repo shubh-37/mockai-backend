@@ -13,6 +13,8 @@ from datetime import datetime
 import os
 import boto3
 from io import BytesIO
+import sib_api_v3_sdk
+from sib_api_v3_sdk.rest import ApiException
 import random
 import string
 import time
@@ -55,24 +57,62 @@ def generate_random_filename(original_name: str) -> str:
     return new_name
 
 
+# async def send_email_otp(email: str, otp: int):
+
+#     subject = "Your OTP Verification Code"
+#     body = f"Hello,\n\nYour verification code is {otp}. This code is valid for 5 minutes. Please do not share this code with anyone.\n\nThank you!"
+
+#     message = Mail(
+#         from_email="support@mockai.tech",
+#         to_emails=email,
+#         subject=subject,
+#         html_content=body,
+#     )
+
+#     try:
+#         sg = SendGridAPIClient(os.getenv("SEND_GRID_API_KEY"))
+#         response = sg.send(message)
+#         logging.info(f"Email OTP sent successfully to {email}.")
+#     except Exception as e:
+#         logging.error(f"Error sending email OTP: {e}")
+#         raise HTTPException(status_code=500, detail="Failed to send email OTP.")
+
+
 async def send_email_otp(email: str, otp: int):
-
     subject = "Your OTP Verification Code"
-    body = f"Hello,\n\nYour verification code is {otp}. This code is valid for 5 minutes. Please do not share this code with anyone.\n\nThank you!"
+    body = f"""
+    <html>
+        <body>
+            <p>Hello,</p>
+            <p>Your verification code is <strong>{otp}</strong>. This code is valid for 5 minutes. Please do not share this code with anyone.</p>
+            <p>Thank you!</p>
+        </body>
+    </html>
+    """
 
-    message = Mail(
-        from_email="support@mockai.tech",
-        to_emails=email,
+    # Setup Brevo configuration
+    configuration = sib_api_v3_sdk.Configuration()
+    print(os.getenv("BREVO_API_KEY"))
+    configuration.api_key["api-key"] = os.getenv("BREVO_API_KEY")
+
+    api_instance = sib_api_v3_sdk.TransactionalEmailsApi(
+        sib_api_v3_sdk.ApiClient(configuration)
+    )
+
+    send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
+        to=[{"email": email}],
+        sender={"email": "support@mockai.tech", "name": "MockAI Support"},
         subject=subject,
         html_content=body,
     )
 
     try:
-        sg = SendGridAPIClient(os.getenv("SEND_GRID_API_KEY"))
-        response = sg.send(message)
-        logging.info(f"Email OTP sent successfully to {email}.")
-    except Exception as e:
-        logging.error(f"Error sending email OTP: {e}")
+        api_response = api_instance.send_transac_email(send_smtp_email)
+        logging.info(
+            f"Email OTP sent successfully to {email}. Message ID: {api_response.message_id}"
+        )
+    except ApiException as e:
+        logging.error(f"Error sending email OTP to {email}: {e}")
         raise HTTPException(status_code=500, detail="Failed to send email OTP.")
 
 
