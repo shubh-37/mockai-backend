@@ -47,58 +47,6 @@ class FeedbackInput(BaseModel):
     qaa: str
 
 
-# def create_dynamic_question_agent():
-#     template = """
-#         Greet the candidate warmly in real time. Start by asking a friendly, conversational introductory question that prompts the candidate to introduce themselves.
-
-#         Then, generate 9 additional unique and well-structured interview questions for a candidate applying for the role of {job_role} at {company} in the field of {field}, with {years_of_experience} years of experience.
-
-#         The questions should be balanced as follows:
-#         - At least three deeply technical questions that test core expertise based on the candidate's resume ({resume}).
-#         - The remaining six should assess problem-solving, frameworks/tools proficiency, real-world application, best practices, debugging, and cultural fit.
-
-#         Structure:
-#         1. Ask the candidate to introduce themselves in a natural, friendly way.
-#         2. Ask a specific, deeply technical question based on the resume to assess core expertise.
-#         3. Ask a technical question focused on a different relevant skill or area of expertise.
-#         4. Pose an advanced or specialized technical scenario to assess depth of knowledge.
-#         5. Present a realistic problem-solving scenario they might face in this role.
-#         6. Ask a question that assesses understanding of industry best practices or optimization strategies.
-#         7. Evaluate proficiency with key frameworks/tools mentioned in the resume.
-#         8. Present a debugging or edge-case troubleshooting scenario relevant to the job field.
-#         9. Ask a question that explores knowledge of current trends or innovations in the field.
-#         10. Ask a question that evaluates cultural fit, communication, or teamwork skills in the workplace.
-
-#         Return a JSON object in the following format (with no placeholder text):
-#         {{
-#         "greeting": "Your warm greeting message",
-#         "questions": [
-#             "Conversational introductory question...",
-#             "Fully-formed technical question 1...",
-#             "Fully-formed technical question 2...",
-#             "Advanced technical scenario question...",
-#             "Real-world problem-solving scenario...",
-#             "Best practices and optimization question...",
-#             "Frameworks/tools proficiency question...",
-#             "Debugging or edge case handling scenario...",
-#             "Trends/innovation awareness question...",
-#             "Cultural fit or teamwork question..."
-#         ]
-#         }}
-#         """
-#     prompt = PromptTemplate(
-#         template=template,
-#         input_variables=[
-#             "job_role",
-#             "company",
-#             "resume",
-#             "years_of_experience",
-#             "field",
-#         ],
-#     )
-#     return LLMChain(llm=llm, prompt=prompt)
-
-
 def create_dynamic_question_agent():
     template = """
 You are a smart and friendly interview assistant.
@@ -145,7 +93,7 @@ Your goal is to generate exactly 10 thoughtful and well-structured interview que
 
 5. You must generate exactly 10 questions including the intro. Do not stop at 9.
 
-6. Do not repeat or closely mirror any of the candidate's previously asked questions (if provided).
+6. Do not repeat or rephrase any of the candidate's previously asked questions (if provided).
 
 ---
 
@@ -243,7 +191,7 @@ Your goal is to generate exactly 10 thoughtful and well-structured interview que
 
 4. You must generate exactly 10 questions including the intro. Do not stop at 9.
 
-5. Do not repeat or closely mirror any of the candidate's previously asked questions (if provided).
+5. Do not repeat or rephrase any of the candidate's previously asked questions (if provided).
 
 ---
 
@@ -294,103 +242,6 @@ def generate_simple_interview_questions(
             "previous_questions_section": previous_questions_section,
         }
     )
-
-
-# def create_feedback_analysis_agent():
-#     template = """
-# You are a highly experienced and consistent interview evaluator. Based on the candidate's interview responses provided below as JSON, generate a detailed and structured JSON report that strictly follows the FreeReview schema.
-
-# Key Instructions:
-# 1. Each answered question must be individually scored from 0 to 10 based on quality, clarity, and relevance. Unanswered questions = 0.
-# 2. The overall score = sum of individual question scores. Maximum possible score is {max_score}.
-# 3. The overall summary must reflect specific analysis and give the candidate 2-3 clear and constructive feedback points.
-# 4. Skill analysis must be *relative and proportional* to the completeness, consistency, and quality of *all responses together*, not just one.
-# 5. Use the following criteria for skill metrics:
-#    - *Clarity* and *articulation* scale with how clearly and consistently all answers are written and explained.
-#    - *Active listening* should be tied to how well the candidate addresses the core of each question across the board, not just one.
-#    - *Conceptual skills* should reflect understanding demonstrated in multiple answers. If only one answer is strong, scale scores accordingly.
-#    - *Speech scores* must be averaged estimates across all responses, and penalize vague, short, or incomplete answers.
-# 6. Cap the maximum skill sub-score (out of 100) to be no higher than the average percentage of answered questions and quality across responses.
-# 7. Avoid random zeros or overinflated 90+ values unless responses consistently justify them.
-# 8. Include exactly 3 strengths and 3 weaknesses based on real patterns in the responses.
-# 9. Include completion rate as: (answered_questions / total_questions) * 100, rounded to nearest integer.
-
-# Candidate Responses:
-# {responses}
-
-# Output the JSON object in exactly this format:
-# {{
-#   "overall_score": <realistic total score from 0 to {max_score}>,
-#   "overall_summary": "<2-3 sentence feedback directly to candidate>",
-
-#   "skill_analysis": {{
-#      "communication_skills": {{
-#          "clarity": <0-100>,
-#          "articulation": <0-100>,
-#          "active_listening": <0-100>
-#      }},
-#      "conceptual_understanding": {{
-#          "fundamental_concepts": <0-100>,
-#          "theoretical_application": <0-100>,
-#          "analytical_reasoning": <0-100>
-#      }},
-#      "speech_analysis": {{
-#          "avg_filler_words_used": <integer>,
-#          "avg_confidence_level": "<High|Medium|Low>",
-#          "avg_fluency_rate": <0-100>
-#      }},
-#      "time_management": {{
-#          "average_response_time": "<e.g., '35 seconds'>",
-#          "question_completion_rate": <int: percentage of answered questions>,
-#          "total_time_spent": "<e.g., '3 minutes 4 seconds'>"
-#      }}
-#   }},
-#   "strengths_and_weaknesses": [
-#      {{
-#         "type": "strength",
-#         "title": "<strength title>",
-#         "description": "<detailed explanation>"
-#      }},
-#      {{
-#         "type": "strength",
-#         "title": "<another strength title>",
-#         "description": "<detailed explanation>"
-#      }},
-#      {{
-#         "type": "strength",
-#         "title": "<another strength title>",
-#         "description": "<detailed explanation>"
-#      }},
-#      {{
-#         "type": "weakness",
-#         "title": "<weakness title>",
-#         "description": "<detailed explanation>"
-#      }},
-#      {{
-#         "type": "weakness",
-#         "title": "<another weakness title>",
-#         "description": "<detailed explanation>"
-#      }},
-#      {{
-#         "type": "weakness",
-#         "title": "<another weakness title>",
-#         "description": "<detailed explanation>"
-#      }}
-#   ]
-# }}
-# """
-
-#     prompt = PromptTemplate(
-#         template=template,
-#         input_variables=[
-#             "responses",
-#             "total_questions",
-#             "answered_questions",
-#             "max_score",
-#         ],
-#     )
-#     return LLMChain(llm=llm, prompt=prompt)
-
 
 def create_feedback_analysis_agent():
     template = """
